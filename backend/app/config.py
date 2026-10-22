@@ -1,6 +1,5 @@
 """Application configuration and settings."""
 
-import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -37,7 +36,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] | str = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # Groq-hosted language model
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
+    GROQ_API_KEY: str | None = None
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     GROQ_TIMEOUT_SECONDS: float = 45.0
     GROQ_STT_MODEL: str = "whisper-large-v3-turbo"
