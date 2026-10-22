@@ -29,7 +29,10 @@ def _get_transformer_model():
                 local_files_only=True,
             )
         except Exception as exc:
-            logger.info("SentenceTransformer local model unavailable (%s); using deterministic fallback.", exc)
+            logger.info(
+                "SentenceTransformer local model unavailable (%s); using deterministic fallback.",
+                exc,
+            )
             _SENTENCE_TRANSFORMER_MODEL = False
     return _SENTENCE_TRANSFORMER_MODEL if _SENTENCE_TRANSFORMER_MODEL is not False else None
 

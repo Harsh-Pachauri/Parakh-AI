@@ -1,15 +1,16 @@
 """Application configuration and settings."""
 
-from functools import lru_cache
 import os
+from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from dotenv import load_dotenv
 
 # Load variables from the .env file into the system environment
-load_dotenv() 
+load_dotenv()
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""

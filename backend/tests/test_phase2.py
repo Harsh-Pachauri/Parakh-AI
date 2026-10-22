@@ -13,7 +13,9 @@ from tests.test_courses import create_user_and_get_token
 @pytest.mark.asyncio
 async def test_document_upload_and_list(client):
     """Teachers can upload a text document to a topic and list it back."""
-    token = await create_user_and_get_token(client, "teacher2@example.com", "teacher", "Teacher Two")
+    token = await create_user_and_get_token(
+        client, "teacher2@example.com", "teacher", "Teacher Two"
+    )
 
     course = await client.post(
         "/api/courses",
@@ -88,11 +90,19 @@ def test_chunking_and_retrieval_helpers():
 @pytest.mark.asyncio
 async def test_question_generation_returns_structured_questions(client, monkeypatch):
     """The generator should create a list of exam questions with key points and difficulty."""
-    token = await create_user_and_get_token(client, "teacher3@example.com", "teacher", "Teacher Three")
+    token = await create_user_and_get_token(
+        client, "teacher3@example.com", "teacher", "Teacher Three"
+    )
 
     class ApiStaticProvider:
         async def generate(self, prompt: str, schema: dict | None = None):
-            return [{"question": "Explain motion.", "key_points": ["velocity", "acceleration"], "difficulty": "easy"}]
+            return [
+                {
+                    "question": "Explain motion.",
+                    "key_points": ["velocity", "acceleration"],
+                    "difficulty": "easy",
+                }
+            ]
 
     monkeypatch.setattr("app.services.question_service.get_provider", lambda: ApiStaticProvider())
 
