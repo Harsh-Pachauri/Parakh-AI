@@ -52,9 +52,7 @@ async def test_live_turn_persists_answer_and_queues_contextual_question(
                         "subtopics": ["Breadth-first search"] * 100,
                         "key_concepts": ["Queue-based traversal"] * 100,
                         "learning_objectives": ["irrelevant"] * 100,
-                        "source_references": [
-                            {"start": 0, "end": len(course_row.syllabus_text)}
-                        ],
+                        "source_references": [{"start": 0, "end": len(course_row.syllabus_text)}],
                     }
                 ],
             }
