@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.llm.groq import GroqRequestError
 from app.services.rag_service import cosine_similarity, embed_chunks
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ class EmbeddingSimilarityScorer:
 class LLMJudgeScorer:
     """Ask an LLM to score a transcript against rubric criteria."""
 
-    def __init__(self, provider: Any | None = None, max_retries: int = 2) -> None:
+    def __init__(self, provider: Any | None = None, max_retries: int = 1) -> None:
         self.provider = provider
         self.max_retries = max_retries
 
@@ -118,18 +119,6 @@ class LLMJudgeScorer:
             "additionalProperties": False,
         }
 
-    @staticmethod
-    def _fallback_rubric(transcript: str, key_points: list[str]) -> RubricScore:
-        embed_score = EmbeddingSimilarityScorer().score(transcript, key_points)
-        score_value = round(max(0.0, min(10.0, embed_score * 10.0)), 1)
-        return RubricScore(
-            correctness=score_value,
-            completeness=max(0.0, min(10.0, score_value * 0.9)),
-            clarity=max(0.0, min(10.0, score_value * 0.8)),
-            justification="Fallback score based on semantic similarity to expected key points.",
-            llm_score=max(0.0, min(1.0, score_value / 10.0)),
-        )
-
     async def score(
         self,
         question: str,
@@ -156,33 +145,45 @@ class LLMJudgeScorer:
         prompt = self._prompt_template()
         prompt = prompt.replace("{question}", str(question))
         prompt = prompt.replace("{transcript}", text)
-        prompt = prompt.replace("{key_points}", "\n- ".join(str(point) for point in key_points or []))
+        prompt = prompt.replace(
+            "{key_points}", "\n- ".join(str(point) for point in key_points or [])
+        )
 
         last_error: Exception | None = None
-        for _ in range(self.max_retries + 1):
+        for attempt in range(self.max_retries + 1):
             try:
-                response = await provider.generate(prompt, schema=self._schema())
+                request_prompt = prompt
+                if attempt:
+                    request_prompt += (
+                        "\nYour previous response did not validate. Return a corrected JSON "
+                        "object with all required numeric rubric fields and no additional text."
+                    )
+                response = await provider.generate(request_prompt, schema=self._schema())
                 if not isinstance(response, dict):
-                    raise ValueError("LLM judge returned a non-dictionary response.")
+                    raise ValueError("Groq judge returned a non-object response.")
+                required = {"correctness", "completeness", "clarity", "justification"}
+                if not required.issubset(response):
+                    raise ValueError("Groq judge omitted required rubric fields.")
 
                 normalization = {
-                    "correctness": float(response.get("correctness", 0.0)),
-                    "completeness": float(response.get("completeness", 0.0)),
-                    "clarity": float(response.get("clarity", 0.0)),
-                    "justification": str(response.get("justification", "")),
+                    "correctness": float(response["correctness"]),
+                    "completeness": float(response["completeness"]),
+                    "clarity": float(response["clarity"]),
+                    "justification": str(response["justification"])[:1000],
                 }
                 rubric = RubricScore(**normalization)
                 rubric.llm_score = float(
                     (rubric.correctness + rubric.completeness + rubric.clarity) / 30.0
                 )
                 return rubric
-            except Exception as exc:  # pragma: no cover - retry path covered in tests via mock provider
+            except GroqRequestError as exc:
+                raise RuntimeError(str(exc)) from exc
+            except (ValueError, TypeError) as exc:
                 last_error = exc
-                logger.warning("LLM judge failed to return valid rubric: %s", exc)
+                logger.warning("Groq judge response failed schema validation: %s", exc)
 
-        logger.warning("Falling back to embedding-only scoring after failed rubric evaluation: %s", last_error)
         raise RuntimeError(
-            "Local AI scoring failed. Check that Ollama is running and the configured model is installed."
+            f"Groq answer evaluation returned invalid rubric data: {last_error}"
         ) from last_error
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-FILLER_WORDS = {"um", "uh", "like", "you know", "basically", "literally"}
+FILLER_WORDS = {"um", "uh", "erm", "er"}
 
 
 def clean_transcript(text: str) -> str:
@@ -14,9 +14,10 @@ def clean_transcript(text: str) -> str:
     for filler in sorted(FILLER_WORDS, key=len, reverse=True):
         cleaned = re.sub(rf"\b{re.escape(filler)}\b", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    cleaned = cleaned.strip()
     cleaned = re.sub(
-        r"(?<!^)(?<!\.\s)(?<!\?\s)(?<!!\s)([A-Za-z])([A-Za-z]+)",
-        lambda m: m.group(1).upper() + m.group(2) if m.group(1).isalpha() else m.group(0),
+        r"(^|[.!?]\s+)([a-z])",
+        lambda match: f"{match.group(1)}{match.group(2).upper()}",
         cleaned,
     )
     cleaned = re.sub(r"\s+", " ", cleaned).strip()

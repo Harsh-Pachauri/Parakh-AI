@@ -2,8 +2,18 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class CourseInterviewConfig(BaseModel):
+    """Teacher-configured defaults for student interviews."""
+
+    max_questions: int = Field(default=5, ge=1, le=10)
+    max_duration_sec: int = Field(default=900, ge=60, le=7200)
+    difficulty: Literal["easy", "medium", "hard"] = "medium"
+    topic_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
 
 
 class TopicBase(BaseModel):
@@ -41,7 +51,11 @@ class CourseBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     code: str = Field(..., min_length=1, max_length=50)
+    subject: str | None = Field(default=None, max_length=255)
     description: str | None = None
+    academic_level: str | None = Field(default=None, max_length=100)
+    syllabus_text: str | None = None
+    interview_config: CourseInterviewConfig = Field(default_factory=CourseInterviewConfig)
 
 
 class CourseCreate(CourseBase):
@@ -55,7 +69,11 @@ class CourseUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     code: str | None = Field(default=None, min_length=1, max_length=50)
+    subject: str | None = Field(default=None, max_length=255)
     description: str | None = None
+    academic_level: str | None = Field(default=None, max_length=100)
+    syllabus_text: str | None = None
+    interview_config: CourseInterviewConfig | None = None
 
 
 class CourseResponse(CourseBase):
@@ -67,3 +85,5 @@ class CourseResponse(CourseBase):
     teacher_id: uuid.UUID
     created_at: datetime
     topics: list[TopicResponse] = Field(default_factory=list)
+    syllabus_analysis: dict | None = None
+    interview_config: CourseInterviewConfig = Field(default_factory=CourseInterviewConfig)

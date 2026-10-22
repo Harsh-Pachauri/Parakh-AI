@@ -20,89 +20,30 @@ logger = logging.getLogger(__name__)
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "llm" / "prompts" / "question_gen_v1.txt"
 
 QUESTION_ARRAY_SCHEMA = {
-    "type": "array",
-    "items": {
-        "type": "object",
-        "properties": {
-            "question": {"type": "string"},
-            "key_points": {
-                "type": "array",
-                "items": {"type": "string"},
+    "type": "object",
+    "properties": {
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "key_points": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "difficulty": {
+                        "type": "string",
+                        "enum": ["easy", "medium", "hard"],
+                    },
+                },
+                "required": ["question", "key_points", "difficulty"],
             },
-            "difficulty": {
-                "type": "string",
-                "enum": ["easy", "medium", "hard"],
-            },
-        },
-        "required": ["question", "key_points", "difficulty"],
+        }
     },
+    "required": ["questions"],
+    "additionalProperties": False,
 }
-
-
-class LocalLLMProvider(LLMProvider):
-    """Deterministic local provider used when external LLM credentials are absent."""
-
-    async def generate(self, prompt: str, schema: dict | None = None) -> list[dict[str, Any]]:
-        """Produce structured exam questions from context text in a predictable shape."""
-        context_marker = "Syllabus and Reference Material:\n"
-        if context_marker in prompt:
-            context = prompt.split(context_marker, 1)[-1].split("Your task:\n", 1)[0]
-        else:
-            context = prompt
-
-        lines = [
-            line.strip()
-            for line in context.splitlines()
-            if line.strip() and not line.startswith("Topic Name:")
-        ]
-        items: list[dict[str, Any]] = []
-
-        difficulties = ["easy", "medium", "hard"]
-
-        for idx, line in enumerate(lines[:10], start=1):
-            if len(line) < 15:
-                continue
-            sentences = [s.strip() for s in line.split(".") if len(s.strip()) > 8]
-            if not sentences:
-                continue
-
-            core_concept = sentences[0]
-            key_points = [
-                f"Explain {core_concept[:50]}",
-                "Discuss practical relevance and key mechanisms",
-            ]
-            if len(sentences) > 1:
-                key_points.append(f"Relate to: {sentences[1][:50]}")
-
-            diff = difficulties[(idx - 1) % len(difficulties)]
-            items.append(
-                {
-                    "question": f"Explain the principles and mechanisms of: {core_concept}.",
-                    "key_points": key_points,
-                    "difficulty": diff,
-                }
-            )
-
-        if not items:
-            items = [
-                {
-                    "question": "Explain the fundamental principles described in the syllabus.",
-                    "key_points": ["Core definitions", "Key properties and applications"],
-                    "difficulty": "easy",
-                },
-                {
-                    "question": "Compare and contrast the primary mechanisms covered in this topic.",
-                    "key_points": ["Identify trade-offs", "Discuss advantages and drawbacks"],
-                    "difficulty": "medium",
-                },
-                {
-                    "question": "How would you diagnose and address performance limitations in this domain?",
-                    "key_points": ["Identify bottleneck factors", "Formulate mitigation strategy"],
-                    "difficulty": "hard",
-                },
-            ]
-
-        return items
 
 
 class QuestionService:
@@ -142,27 +83,29 @@ class QuestionService:
 
     @staticmethod
     def _normalize_question(item: dict) -> dict[str, Any]:
-        """Ensure question payload strictly satisfies schema conventions."""
+        """Validate and normalize a model-produced question before persistence."""
+        if not isinstance(item, dict):
+            raise ValueError("Groq returned an invalid question.")
         difficulty = str(item.get("difficulty", "medium")).lower()
         if difficulty not in {"easy", "medium", "hard"}:
-            difficulty = "medium"
+            raise ValueError("Groq returned an unsupported question difficulty.")
 
-        raw_points = item.get("key_points") or item.get("expected_key_points") or ["Core concept"]
-        if not isinstance(raw_points, list):
-            raw_points = [str(raw_points)]
+        raw_points = item.get("key_points") or item.get("expected_key_points")
+        if not isinstance(raw_points, list) or any(
+            not isinstance(point, str) for point in raw_points
+        ):
+            raise ValueError("Groq returned invalid expected answer points.")
 
         cleaned_points = [str(pt).strip() for pt in raw_points if str(pt).strip()]
         if not cleaned_points:
-            cleaned_points = ["Core concept"]
+            raise ValueError("Groq returned a question without expected answer points.")
 
-        question_text = (
-            item.get("question")
-            or item.get("question_text")
-            or "Explain the core concept covered in this topic."
-        ).strip()
+        question_text = item.get("question") or item.get("question_text")
+        if not isinstance(question_text, str) or not question_text.strip():
+            raise ValueError("Groq returned an empty question.")
 
         return {
-            "question": question_text,
+            "question": question_text.strip(),
             "key_points": cleaned_points,
             "difficulty": difficulty,
         }
@@ -206,12 +149,12 @@ class QuestionService:
             ):
                 generated_raw = [self._normalize_question(item) for item in res["questions"]]
         except Exception as exc:
-            logger.error("Local question generation failed: %s", exc)
+            logger.error("Groq question generation failed: %s", exc)
             raise
 
         if not generated_raw:
             raise RuntimeError(
-                "Ollama returned no questions. Check the configured local model and try again."
+                "Groq returned no questions. Verify the configured model and try again."
             )
 
         normalized_candidates = generated_raw[:count]

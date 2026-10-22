@@ -7,9 +7,11 @@ from fastapi import status
 from sqlalchemy import select
 
 from app.llm.base import LLMProvider
+from app.llm.groq import GroqProvider
 from app.models.prompt_version import PromptVersion
 from app.models.question import Question
-from app.services.question_service import LocalLLMProvider, QuestionService
+from app.services.llm_service import get_provider
+from app.services.question_service import QuestionService
 from tests.test_courses import create_user_and_get_token
 
 
@@ -99,29 +101,39 @@ async def test_question_deduplication(db_session):
     assert len(all_questions) == 2
 
 
-@pytest.mark.asyncio
-async def test_local_llm_provider_fallback():
-    """LocalLLMProvider should produce structured fallback questions from raw text."""
-    provider = LocalLLMProvider()
-    questions = await provider.generate(
-        "Syllabus and Reference Material:\nBinary search operates in O(log n) time."
+def test_groq_is_the_only_provider(monkeypatch):
+    """No alternative or local LLM is selected when Groq is unavailable."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "app.llm.groq.get_settings",
+        lambda: SimpleNamespace(
+            GROQ_API_KEY="test-key",
+            GROQ_MODEL="openai/gpt-oss-120b",
+            GROQ_TIMEOUT_SECONDS=3.0,
+        ),
     )
-    assert len(questions) >= 1
-    assert "question" in questions[0]
-    assert "key_points" in questions[0]
-    assert questions[0]["difficulty"] in {"easy", "medium", "hard"}
+    assert isinstance(get_provider(), GroqProvider)
 
 
 @pytest.mark.asyncio
 async def test_question_api_crud_flow(client, monkeypatch):
     """End-to-end question CRUD lifecycle: generate -> list -> get -> update -> approve -> delete."""
     # 1. Register teacher
-    t_token = await create_user_and_get_token(client, "prof_questions@example.com", "teacher", "Prof Q")
+    t_token = await create_user_and_get_token(
+        client, "prof_questions@example.com", "teacher", "Prof Q"
+    )
     t_headers = {"Authorization": f"Bearer {t_token}"}
 
     class StaticProvider:
         async def generate(self, prompt: str, schema: dict | None = None):
-            return [{"question": "What is a data structure?", "key_points": ["organizes data"], "difficulty": "easy"}]
+            return [
+                {
+                    "question": "What is a data structure?",
+                    "key_points": ["organizes data"],
+                    "difficulty": "easy",
+                }
+            ]
 
     monkeypatch.setattr("app.services.question_service.get_provider", lambda: StaticProvider())
 
@@ -204,3 +216,92 @@ async def test_question_api_crud_flow(client, monkeypatch):
     # 11. Verify deleted
     verify_res = await client.get(f"/api/questions/{q_id}", headers=t_headers)
     assert verify_res.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_teacher_question_bank_crud_search_and_ownership(client):
+    owner_token = await create_user_and_get_token(
+        client, "bank.owner@example.com", "teacher", "Bank Owner"
+    )
+    other_token = await create_user_and_get_token(
+        client, "bank.other@example.com", "teacher", "Other Teacher"
+    )
+    owner_headers = {"Authorization": "Bearer " + owner_token}
+    other_headers = {"Authorization": "Bearer " + other_token}
+    course = await client.post(
+        "/api/courses",
+        headers=owner_headers,
+        json={"name": "Databases", "code": "DB301", "syllabus_text": "Normalization and indexes."},
+    )
+    topic = await client.post(
+        f"/api/courses/{course.json()['id']}/topics",
+        headers=owner_headers,
+        json={"name": "Normalization"},
+    )
+    created = await client.post(
+        "/api/questions",
+        headers=owner_headers,
+        json={
+            "topic_id": topic.json()["id"],
+            "question_text": "Explain third normal form.",
+            "expected_key_points": ["functional dependencies", "transitive dependency"],
+            "difficulty": "medium",
+            "question_type": "conceptual",
+            "tags": ["dbms"],
+        },
+    )
+    assert created.status_code == 201, created.text
+    question_id = created.json()["id"]
+
+    listing = await client.get(
+        "/api/questions",
+        headers=owner_headers,
+        params={"search": "third normal", "course_id": course.json()["id"], "limit": 5},
+    )
+    assert listing.status_code == 200, listing.text
+    assert listing.json()["total"] == 1
+    assert listing.json()["items"][0]["id"] == question_id
+
+    forbidden = await client.put(
+        f"/api/questions/{question_id}",
+        headers=other_headers,
+        json={"question_text": "Unauthorized edit"},
+    )
+    assert forbidden.status_code == 403
+    updated = await client.put(
+        f"/api/questions/{question_id}",
+        headers=owner_headers,
+        json={"question_text": "Explain 3NF and its role.", "tags": ["normalization", "dbms"]},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["question_text"] == "Explain 3NF and its role."
+
+    persisted = await client.get(f"/api/questions/{question_id}", headers=owner_headers)
+    assert persisted.json()["tags"] == ["normalization", "dbms"]
+    deleted = await client.delete(f"/api/questions/{question_id}", headers=owner_headers)
+    assert deleted.status_code == 204
+    assert (await client.get("/api/questions", headers=owner_headers)).json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_question_create_rejects_missing_expected_points(client):
+    token = await create_user_and_get_token(
+        client, "bank.invalid@example.com", "teacher", "Bank Invalid"
+    )
+    headers = {"Authorization": "Bearer " + token}
+    course = await client.post(
+        "/api/courses",
+        headers=headers,
+        json={"name": "Networks", "code": "NET201"},
+    )
+    topic = await client.post(
+        f"/api/courses/{course.json()['id']}/topics",
+        headers=headers,
+        json={"name": "Routing"},
+    )
+    response = await client.post(
+        "/api/questions",
+        headers=headers,
+        json={"topic_id": topic.json()["id"], "question_text": "Explain routing."},
+    )
+    assert response.status_code == 422

@@ -23,6 +23,9 @@ class QuestionResponse(BaseModel):
     topic_id: uuid.UUID
     question_text: str
     expected_key_points: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    question_type: str | None = None
+    explanation: str | None = None
     difficulty: QuestionDifficulty
     is_approved: bool = False
     generated_by: uuid.UUID | None = None
@@ -39,3 +42,27 @@ class QuestionUpdate(BaseModel):
     expected_key_points: list[str] | None = None
     difficulty: QuestionDifficulty | None = None
     is_approved: bool | None = None
+    tags: list[str] | None = None
+    question_type: str | None = Field(default=None, max_length=50)
+    explanation: str | None = None
+
+
+class QuestionCreate(BaseModel):
+    """Teacher-authored question-bank entry."""
+
+    topic_id: uuid.UUID
+    question_text: str = Field(min_length=1, max_length=12000)
+    expected_key_points: list[str] = Field(min_length=1, max_length=50)
+    difficulty: QuestionDifficulty = QuestionDifficulty.MEDIUM
+    tags: list[str] = Field(default_factory=list, max_length=30)
+    question_type: str | None = Field(default=None, max_length=50)
+    explanation: str | None = None
+
+
+class QuestionPageResponse(BaseModel):
+    """Paginated question-bank results."""
+
+    items: list[QuestionResponse]
+    total: int
+    offset: int
+    limit: int

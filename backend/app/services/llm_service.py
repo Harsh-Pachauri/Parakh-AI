@@ -1,13 +1,12 @@
-"""Provider selection and caching for evaluation requests."""
+"""Centralized Groq-backed LLM service and evaluation response cache."""
 
 from __future__ import annotations
 
 import hashlib
 from typing import Any
 
-from app.config import get_settings
 from app.llm.base import LLMProvider
-from app.llm.ollama import OllamaProvider
+from app.llm.groq import GroqProvider
 
 _CACHE: dict[str, Any] = {}
 
@@ -19,9 +18,8 @@ def _make_cache_key(question_id: str | Any, transcript: str) -> str:
 
 
 def get_provider() -> LLMProvider:
-    """Return the configured local Ollama provider."""
-    settings = get_settings()
-    return OllamaProvider(base_url=settings.OLLAMA_BASE_URL, model=settings.OLLAMA_MODEL)
+    """Return the sole supported LLM provider."""
+    return GroqProvider()
 
 
 def get_cached_response(question_id: str | Any, transcript: str) -> Any | None:

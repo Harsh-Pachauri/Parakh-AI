@@ -1,24 +1,148 @@
-"""Question bank endpoints for generated and approved oral-exam questions."""
+"""Question-bank CRUD and question generation endpoints."""
 
 from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_role
+from app.models.course import Course
 from app.models.document import Document
 from app.models.question import Question, QuestionDifficulty
 from app.models.topic import Topic
 from app.models.user import User, UserRole
-from app.schemas.question import QuestionGenerateRequest, QuestionResponse, QuestionUpdate
+from app.schemas.question import (
+    QuestionCreate,
+    QuestionGenerateRequest,
+    QuestionPageResponse,
+    QuestionResponse,
+    QuestionUpdate,
+)
 from app.services.document_service import DocumentService
 from app.services.question_service import QuestionService
 from app.services.rag_service import chunk_text, retrieve_for_topic
 
 router = APIRouter(tags=["Questions"])
+
+
+async def _question_for_teacher(
+    question_id: uuid.UUID, current_user: User, db: AsyncSession
+) -> Question:
+    result = await db.execute(
+        select(Question)
+        .join(Topic, Question.topic_id == Topic.id)
+        .join(Course, Topic.course_id == Course.id)
+        .where(Question.id == question_id)
+    )
+    question = result.scalar_one_or_none()
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    if current_user.role == UserRole.TEACHER:
+        owner_id = await db.scalar(
+            select(Course.teacher_id)
+            .join(Topic, Topic.course_id == Course.id)
+            .where(Topic.id == question.topic_id)
+        )
+        if owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You cannot manage this question")
+    return question
+
+
+async def _require_topic_owner(topic_id: uuid.UUID, current_user: User, db: AsyncSession) -> None:
+    if current_user.role != UserRole.TEACHER:
+        return
+    owner_id = await db.scalar(
+        select(Course.teacher_id)
+        .join(Topic, Topic.course_id == Course.id)
+        .where(Topic.id == topic_id)
+    )
+    if owner_id is None:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    if owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You cannot access this course topic")
+
+
+@router.get("/questions", response_model=QuestionPageResponse)
+async def search_questions(
+    current_user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+    search: str | None = Query(default=None, max_length=200),
+    course_id: uuid.UUID | None = None,
+    topic_id: uuid.UUID | None = None,
+    difficulty: QuestionDifficulty | None = None,
+    question_type: str | None = Query(default=None, max_length=50),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> QuestionPageResponse:
+    """Search the current teacher's question bank with bounded pagination."""
+    statement = (
+        select(Question)
+        .join(Topic, Question.topic_id == Topic.id)
+        .join(Course, Topic.course_id == Course.id)
+    )
+    if current_user.role == UserRole.TEACHER:
+        statement = statement.where(Course.teacher_id == current_user.id)
+    if course_id is not None:
+        statement = statement.where(Course.id == course_id)
+    if topic_id is not None:
+        statement = statement.where(Question.topic_id == topic_id)
+    if difficulty is not None:
+        statement = statement.where(Question.difficulty == difficulty)
+    if question_type:
+        statement = statement.where(Question.question_type == question_type)
+    if search:
+        statement = statement.where(Question.question_text.ilike(f"%{search.strip()}%"))
+
+    count_result = await db.execute(select(func.count()).select_from(statement.subquery()))
+    result = await db.execute(
+        statement.order_by(Question.created_at.desc()).offset(offset).limit(limit)
+    )
+    return QuestionPageResponse(
+        items=[QuestionResponse.model_validate(item) for item in result.scalars().all()],
+        total=count_result.scalar_one(),
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post("/questions", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
+async def create_question(
+    payload: QuestionCreate,
+    current_user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> QuestionResponse:
+    """Create a persistent teacher-managed question."""
+    result = await db.execute(
+        select(Topic).join(Course, Topic.course_id == Course.id).where(Topic.id == payload.topic_id)
+    )
+    topic = result.scalar_one_or_none()
+    if topic is None:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    if current_user.role == UserRole.TEACHER:
+        owner_id = await db.scalar(select(Course.teacher_id).where(Course.id == topic.course_id))
+        if owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You cannot manage this course")
+
+    question = Question(
+        topic_id=topic.id,
+        question_text=payload.question_text.strip(),
+        expected_key_points=[
+            point.strip() for point in payload.expected_key_points if point.strip()
+        ],
+        difficulty=payload.difficulty,
+        tags=[tag.strip() for tag in payload.tags if tag.strip()],
+        question_type=payload.question_type,
+        explanation=payload.explanation,
+        is_approved=True,
+        generated_by=current_user.id,
+    )
+    db.add(question)
+    await db.commit()
+    await db.refresh(question)
+    return QuestionResponse.model_validate(question)
 
 
 @router.post("/topics/{topic_id}/questions/generate", response_model=list[QuestionResponse])
@@ -28,40 +152,34 @@ async def generate_questions_for_topic(
     current_user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> list[QuestionResponse]:
-    """Generate a set of oral-exam questions from uploaded topic material and RAG chunks."""
+    """Generate oral-exam questions from uploaded topic material and retrieved chunks."""
     topic_result = await db.execute(select(Topic).where(Topic.id == topic_id))
     topic = topic_result.scalar_one_or_none()
     if topic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+    await _require_topic_owner(topic_id, current_user, db)
 
     context_chunks: list[str] = []
-
-    # First, try retrieving relevant chunks from the topic's FAISS index
     indexed_chunks = retrieve_for_topic(
         topic_id, query=f"Key concepts, topics, and definitions for {topic.name}", top_k=5
     )
     if indexed_chunks:
         context_chunks.extend(item["text"] for item in indexed_chunks)
     else:
-        # Fall back to extracting text directly from topic documents
         document_result = await db.execute(select(Document).where(Document.topic_id == topic_id))
-        documents = document_result.scalars().all()
-        for document in documents:
-            file_path = document.file_path
+        for document in document_result.scalars().all():
             try:
-                with open(file_path, "rb") as f:
-                    content_bytes = f.read()
-                text = DocumentService.extract_text(document.filename, content_bytes)
-                extracted_chunks = chunk_text(text, chunk_size=512, overlap=64)
-                context_chunks.extend(extracted_chunks[:5])
-            except Exception:
+                with open(document.file_path, "rb") as source_file:
+                    content_bytes = source_file.read()
+                extracted_text = DocumentService.extract_text(document.filename, content_bytes)
+                context_chunks.extend(chunk_text(extracted_text, chunk_size=512, overlap=64)[:5])
+            except (OSError, ValueError):
                 continue
 
     if not context_chunks:
         context_chunks = [
             f"Course topic: {topic.name}. Oral examination questions testing core concepts."
         ]
-
     try:
         await QuestionService().generate_questions(
             topic_id=topic_id,
@@ -79,8 +197,7 @@ async def generate_questions_for_topic(
         .order_by(Question.created_at.desc())
         .limit(payload.count)
     )
-    saved_questions = saved_result.scalars().all()
-    return [QuestionResponse.model_validate(item) for item in saved_questions]
+    return [QuestionResponse.model_validate(item) for item in saved_result.scalars().all()]
 
 
 @router.get("/topics/{topic_id}/questions", response_model=list[QuestionResponse])
@@ -89,11 +206,11 @@ async def list_questions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[QuestionResponse]:
-    """Retrieve the generated questions for a topic."""
+    """Retrieve the questions for a topic."""
     topic_result = await db.execute(select(Topic).where(Topic.id == topic_id))
     if topic_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
-
+    await _require_topic_owner(topic_id, current_user, db)
     result = await db.execute(
         select(Question).where(Question.topic_id == topic_id).order_by(Question.created_at.desc())
     )
@@ -111,6 +228,8 @@ async def get_question(
     question = result.scalar_one_or_none()
     if question is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
+    if current_user.role == UserRole.TEACHER:
+        await _require_topic_owner(question.topic_id, current_user, db)
     return QuestionResponse.model_validate(question)
 
 
@@ -121,21 +240,22 @@ async def update_question(
     current_user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> QuestionResponse:
-    """Allow a teacher to revise or approve a generated question."""
-    result = await db.execute(select(Question).where(Question.id == question_id))
-    question = result.scalar_one_or_none()
-    if question is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
-
+    """Update an existing question, enforcing course ownership."""
+    question = await _question_for_teacher(question_id, current_user, db)
     if payload.question_text is not None:
-        question.question_text = payload.question_text
+        question.question_text = payload.question_text.strip()
     if payload.expected_key_points is not None:
         question.expected_key_points = payload.expected_key_points
     if payload.difficulty is not None:
-        question.difficulty = QuestionDifficulty(payload.difficulty)
+        question.difficulty = payload.difficulty
     if payload.is_approved is not None:
         question.is_approved = payload.is_approved
-
+    if payload.tags is not None:
+        question.tags = [tag.strip() for tag in payload.tags if tag.strip()]
+    if payload.question_type is not None:
+        question.question_type = payload.question_type
+    if payload.explanation is not None:
+        question.explanation = payload.explanation
     await db.commit()
     await db.refresh(question)
     return QuestionResponse.model_validate(question)
@@ -147,12 +267,8 @@ async def approve_question(
     current_user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> QuestionResponse:
-    """Mark a generated question as approved and ready for viva use."""
-    result = await db.execute(select(Question).where(Question.id == question_id))
-    question = result.scalar_one_or_none()
-    if question is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
-
+    """Approve a generated question after verifying course ownership."""
+    question = await _question_for_teacher(question_id, current_user, db)
     question.is_approved = True
     await db.commit()
     await db.refresh(question)
@@ -165,11 +281,7 @@ async def delete_question(
     current_user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete a question from the question bank."""
-    result = await db.execute(select(Question).where(Question.id == question_id))
-    question = result.scalar_one_or_none()
-    if question is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
-
+    """Delete a question after verifying course ownership."""
+    question = await _question_for_teacher(question_id, current_user, db)
     await db.delete(question)
     await db.commit()

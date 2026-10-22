@@ -13,17 +13,19 @@ Guidelines:
 2. For each question, provide 2 to 4 essential "key points" that a strong student response should mention.
 3. Assign an appropriate difficulty level to each question: "easy", "medium", or "hard".
 4. Ensure variety across questions without redundant coverage.
-5. Return ONLY a valid JSON array of objects conforming to the schema below.
+5. Return ONLY a valid JSON object containing a "questions" array conforming to the schema below.
 
 Output JSON format:
-[
-  {
-    "question": "Question text to be asked aloud to the student",
-    "key_points": [
-      "Key point or concept 1",
-      "Key point or concept 2",
-      "Key point or concept 3"
-    ],
-    "difficulty": "easy"
-  }
-]
+{
+  "questions": [
+    {
+      "question": "Question text to be asked aloud to the student",
+      "key_points": [
+        "Key point or concept 1",
+        "Key point or concept 2",
+        "Key point or concept 3"
+      ],
+      "difficulty": "easy"
+    }
+  ]
+}

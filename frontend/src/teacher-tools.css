@@ -1,0 +1,106 @@
+.question-form {
+  display: grid;
+  gap: 16px;
+}
+
+.question-form label,
+.form-grid label {
+  display: grid;
+  gap: 7px;
+  color: #535b60;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.question-form input,
+.question-form textarea,
+.question-form select,
+.form-grid input,
+.form-grid textarea,
+.form-grid select,
+.topic-editor-row input {
+  width: 100%;
+  border: 1px solid #dbdad5;
+  border-radius: 6px;
+  padding: 11px 12px;
+  background: #fff;
+  color: #252a30;
+  font: inherit;
+}
+
+.question-form textarea {
+  resize: vertical;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.topic-coverage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  border: 1px solid #e9e7e2;
+  border-radius: 7px;
+  padding: 15px;
+}
+
+.topic-coverage legend {
+  padding: 0 6px;
+  color: #626b73;
+  font-size: 13px;
+}
+
+.topic-coverage label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #535b60;
+  font-size: 13px;
+}
+
+.syllabus-review {
+  margin-top: 30px;
+  border-top: 1px solid #e9e7e2;
+  padding-top: 20px;
+}
+
+.syllabus-review details {
+  border-bottom: 1px solid #e9e7e2;
+  padding: 12px 0;
+}
+
+.syllabus-review summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.topic-editor-list {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.topic-editor-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.topic-editor-row .muted {
+  grid-column: 1 / -1;
+  font-size: 12px;
+}
+
+.question-bank-list {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 600px) {
+  .topic-editor-row {
+    grid-template-columns: 1fr;
+  }
+}

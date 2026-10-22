@@ -2,7 +2,6 @@
 
 from contextlib import asynccontextmanager
 
-import httpx
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -11,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import api_router
 from app.config import get_settings
 from app.database import get_db
+from app.llm.groq import GroqProvider, GroqRequestError
 
 settings = get_settings()
 
@@ -28,7 +28,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -46,18 +45,13 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict[str, str]:
     try:
         result = await db.execute(text("SELECT 1"))
         _ = result.scalar()
-        db_status = "connected"
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Database connection failed: {exc}",
         ) from exc
 
-    return {
-        "status": "ok",
-        "db": db_status,
-        "message": "Hello, Viva!",
-    }
+    return {"status": "ok", "db": "connected", "message": "Hello, Viva!"}
 
 
 @app.get("/", tags=["Root"])
@@ -72,22 +66,9 @@ async def root() -> dict[str, str]:
 
 @app.get("/api/health/ai", tags=["Health"])
 async def ai_health_check() -> dict[str, str]:
-    """Confirm the configured Ollama model is available before starting a viva."""
-    settings = get_settings()
+    """Verify that the configured Groq model can complete a real request."""
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags")
-            response.raise_for_status()
-            models = response.json().get("models", [])
-    except (httpx.HTTPError, ValueError) as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Local AI is unavailable. Start Ollama, then download the configured model.",
-        ) from exc
-    model_names = {item.get("name") or item.get("model") for item in models}
-    if settings.OLLAMA_MODEL not in model_names:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Ollama is running, but model '{settings.OLLAMA_MODEL}' is missing. Run: ollama pull {settings.OLLAMA_MODEL}",
-        )
-    return {"status": "ok", "provider": "ollama", "model": settings.OLLAMA_MODEL}
+        await GroqProvider().generate("Reply with the single word READY.")
+    except GroqRequestError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    return {"status": "ok", "provider": "groq", "model": settings.GROQ_MODEL}

@@ -211,3 +211,85 @@ async def test_topic_crud(client: AsyncClient) -> None:
         headers={"Authorization": f"Bearer {teacher_token}"},
     )
     assert del_res.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_saved_syllabus_analysis_and_interview_configuration(client, monkeypatch):
+    token = await create_user_and_get_token(
+        client, "syllabus.teacher@example.com", "teacher", "Syllabus Teacher"
+    )
+    headers = {"Authorization": "Bearer " + token}
+    original_syllabus = "Foundations of databases.\n" + ("Normalization and indexing. " * 400)
+    created = await client.post(
+        "/api/courses",
+        headers=headers,
+        json={
+            "name": "Database Systems",
+            "subject": "DBMS",
+            "code": "DB401",
+            "academic_level": "Undergraduate",
+            "syllabus_text": original_syllabus,
+        },
+    )
+    assert created.status_code == 201, created.text
+    course_id = created.json()["id"]
+
+    class SyllabusProvider:
+        async def generate(self, prompt: str, schema: dict | None = None):
+            assert "Source section" in prompt
+            return {
+                "modules": [
+                    {
+                        "name": "Database Foundations",
+                        "topics": [
+                            {
+                                "name": "Normalization",
+                                "subtopics": ["normal forms"],
+                                "key_concepts": ["functional dependencies"],
+                                "learning_objectives": ["identify update anomalies"],
+                                "prerequisites": ["relational model"],
+                                "question_types": ["conceptual"],
+                            }
+                        ],
+                    }
+                ]
+            }
+
+    monkeypatch.setattr("app.api.courses.get_provider", lambda: SyllabusProvider())
+    analyzed = await client.post(f"/api/courses/{course_id}/syllabus/analyze", headers=headers)
+    assert analyzed.status_code == 200, analyzed.text
+    result = analyzed.json()
+    assert result["syllabus_text"] == original_syllabus
+    assert result["syllabus_analysis"]["source_length"] == len(original_syllabus)
+    topic = result["topics"][0]
+    assert topic["name"] == "Normalization"
+    source_references = result["syllabus_analysis"]["modules"][0]["topics"][0]["source_references"]
+    assert len(source_references) >= 2
+    renamed = await client.put(
+        f"/api/courses/{course_id}/syllabus/topics/{topic['id']}",
+        headers=headers,
+        json={"name": "Normalization fundamentals"},
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert (
+        renamed.json()["syllabus_analysis"]["modules"][0]["topics"][0]["name"]
+        == "Normalization fundamentals"
+    )
+
+    updated = await client.put(
+        f"/api/courses/{course_id}",
+        headers=headers,
+        json={
+            "interview_config": {
+                "max_questions": 7,
+                "max_duration_sec": 1200,
+                "difficulty": "hard",
+                "topic_ids": [topic["id"]],
+            }
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["interview_config"]["max_questions"] == 7
+    reopened = await client.get(f"/api/courses/{course_id}", headers=headers)
+    assert reopened.json()["syllabus_text"] == original_syllabus
+    assert reopened.json()["interview_config"]["difficulty"] == "hard"

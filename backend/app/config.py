@@ -1,11 +1,15 @@
 """Application configuration and settings."""
 
 from functools import lru_cache
+import os
 from pathlib import Path
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
 
+# Load variables from the .env file into the system environment
+load_dotenv() 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""
@@ -18,6 +22,7 @@ class Settings(BaseSettings):
 
     APP_NAME: str = "AI Viva Voce System"
     DEBUG: bool = False
+    SQL_ECHO: bool = False
     API_V1_STR: str = "/api"
 
     # Security
@@ -30,9 +35,11 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] | str = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
-    # Local AI services
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3.2:3b"
+    # Groq-hosted language model
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_TIMEOUT_SECONDS: float = 45.0
+    GROQ_STT_MODEL: str = "whisper-large-v3-turbo"
     WHISPER_MODEL: str = "base"
 
     @field_validator("CORS_ORIGINS", mode="before")

@@ -5,7 +5,19 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    Uuid,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -48,6 +60,11 @@ class Question(Base):
         default=list,
         nullable=False,
     )
+    tags: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
+    question_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
     difficulty: Mapped[QuestionDifficulty] = mapped_column(
         Enum(QuestionDifficulty, native_enum=False, length=20),
         default=QuestionDifficulty.MEDIUM,

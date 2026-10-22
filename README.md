@@ -31,7 +31,7 @@ flowchart LR
         SPEECH["Speech Service (faster-whisper)"]
         RAG["RAG Service (MiniLM + FAISS)"]
         EVAL["Eval Engine (Hybrid Scoring)"]
-        LLM["Local Ollama provider"]
+        LLM["Groq-hosted LLM service"]
     end
 
     subgraph Storage
@@ -95,17 +95,19 @@ flowchart LR
 ### Prerequisites
 - **Python 3.11+**
 - **Node.js 18+** & **npm**
-- **Ollama** with the local `llama3.2:3b` model (free local inference)
+- A **Groq API key** for the configured hosted LLM
 - A working webcam and microphone for the live interview
 
 ### Local AI setup
-The backend uses Ollama locally for question generation, answer scoring, and adaptive follow-ups. It uses faster-whisper locally for transcription. No paid AI API key is required. Install Ollama, then run:
+All language-model operations use the official Groq Python SDK; the configured model is `openai/gpt-oss-120b` and there is no local or alternate-provider fallback. Copy `.env.example` to `.env` and set `GROQ_API_KEY` to a key from [Groq Console](https://console.groq.com/). Set a private random `SECRET_KEY`; `.env` is ignored by Git. The backend loads the project-root `.env` before initializing the Groq client. In deployment, supply `GROQ_API_KEY` through the platform's encrypted environment-variable or secret manager. Run `alembic upgrade head` from `backend/` after updating an existing database.
 
-```bash
-ollama pull llama3.2:3b
-```
+The `/api/health/ai` endpoint makes a real completion request using the configured model; an HTTP 200 from the database health route alone does not establish Groq connectivity. Model access, credentials, and rate limits are reported as errors and never trigger a provider switch.
 
-Copy `.env.example` to `.env` if you do not have a local `.env` yet. Set a private random `SECRET_KEY`; the checked-out development `.env` is ignored by Git. The backend reads the project-root `.env` when started from the documented runner. Run `alembic upgrade head` from `backend/` after updating an existing database to add camera analysis consent.
+Teachers can save and analyze course syllabi, review extracted topics, and set per-course interview defaults. The interview uses approved questions from the course bank and generates syllabus-grounded questions through Groq when needed. In supported browsers, live candidate captions use browser speech recognition; browsers without it automatically capture utterances and send them to local faster-whisper or Groq Whisper transcription.
+
+For the most complete live-caption experience, use current Chrome or Edge over `localhost` or HTTPS and allow camera/microphone access. The animated interviewer uses browser text-to-speech; there is no remote AI video feed. If browser speech recognition is unavailable and local faster-whisper is not installed, configure `GROQ_API_KEY` to enable Groq's `whisper-large-v3-turbo` audio fallback (override with `GROQ_STT_MODEL`). Browser speech recognition may use the browser vendor's speech service; the UI requests consent and explains this before starting.
+
+To install the optional local transcription fallback, run `.venv\Scripts\pip install faster-whisper` from `backend/`; this is speech-to-text only, not a language-model provider, and its Whisper model downloads the first time it is used.
 
 ### Option 1: One-Command Runner
 To start both the backend and frontend simultaneously:

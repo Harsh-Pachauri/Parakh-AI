@@ -26,7 +26,7 @@ function Workspace() {
   if (!teacher && route.startsWith('/teacher')) navigate('/')
   if (teacher && route === '/') navigate('/teacher')
   let content
-  if (route === '/viva') content = <VivaScreen navigate={navigate}/>
+  if (route.startsWith('/viva')) content = <VivaScreen navigate={navigate} courseId={route.split('/')[2]}/>
   else if (route.startsWith('/report/')) content = <FeedbackReport sessionId={route.split('/')[2]} navigate={navigate}/>
   else if (route.startsWith('/review/')) content = <SessionReview sessionId={route.split('/')[2]} navigate={navigate}/>
   else if (route === '/questions' && teacher) content = <QuestionBank/>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -10,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.answer import Answer
+from app.models.course import Course
 from app.models.question import Question, QuestionDifficulty
 from app.models.topic import Topic
 from app.models.viva_session import VivaSession, VivaStatus
@@ -30,18 +32,25 @@ class VivaOrchestrator:
         result = await self.db.execute(select(VivaSession).where(VivaSession.id == session_id))
         return result.scalar_one_or_none()
 
-    async def _course_question_ids(self, course_id: uuid.UUID) -> list[uuid.UUID]:
-        result = await self.db.execute(
+    async def _course_question_ids(
+        self,
+        course_id: uuid.UUID,
+        difficulty: str | None = None,
+        topic_ids: list[str] | None = None,
+    ) -> list[uuid.UUID]:
+        statement = (
             select(Question.id)
             .join(Topic, Question.topic_id == Topic.id)
-            .where(Topic.course_id == course_id)
+            .where(Topic.course_id == course_id, Question.is_approved.is_(True))
         )
-        question_ids = result.scalars().all()
-        ordered = sorted(
-            question_ids,
-            key=lambda question_id: self._question_sort_key(question_id),
+        if difficulty:
+            statement = statement.where(Question.difficulty == QuestionDifficulty(difficulty))
+        if topic_ids:
+            statement = statement.where(Topic.id.in_([uuid.UUID(item) for item in topic_ids]))
+        result = await self.db.execute(
+            statement.order_by(Question.times_used.asc(), Question.created_at.asc())
         )
-        return ordered
+        return list(result.scalars().all())
 
     @staticmethod
     def _question_sort_key(question_id: uuid.UUID) -> tuple[int, datetime, uuid.UUID]:
@@ -54,7 +63,12 @@ class VivaOrchestrator:
         if question_order:
             return question_order
 
-        course_question_ids = await self._course_question_ids(session.course_id)
+        config = session.config or {}
+        course_question_ids = await self._course_question_ids(
+            session.course_id,
+            config.get("difficulty"),
+            config.get("topic_ids"),
+        )
         session.config["question_order"] = [str(item) for item in course_question_ids]
         await self.db.commit()
         return course_question_ids
@@ -67,7 +81,10 @@ class VivaOrchestrator:
     ) -> VivaSession:
         """Create a viva session and cache the initial order of reusable questions."""
         viva_config = config or VivaConfig()
-        question_order = await self._course_question_ids(course_id)
+        topic_ids = [str(item) for item in viva_config.topic_ids]
+        question_order = await self._course_question_ids(
+            course_id, viva_config.difficulty, topic_ids
+        )
 
         session = VivaSession(
             student_id=student_id,
@@ -82,6 +99,11 @@ class VivaOrchestrator:
                 "max_questions": viva_config.max_questions,
                 "max_duration_sec": viva_config.max_duration_sec,
                 "follow_up_threshold": viva_config.follow_up_threshold,
+                "difficulty": viva_config.difficulty,
+                "topic_ids": topic_ids,
+                "asked_question_ids": [],
+                "topic_coverage": {},
+                "follow_up_depth": 0,
             },
         )
         self.db.add(session)
@@ -104,8 +126,17 @@ class VivaOrchestrator:
 
         question_order = await self._ensure_question_order(session)
         if not question_order:
-            await self.finish_session(session_id)
-            return None
+            question = await self._generate_initial_question(session)
+            if question is None:
+                await self.finish_session(session_id)
+                return None
+            self.db.add(question)
+            await self.db.flush()
+            question_order = [question.id]
+            config = dict(session.config or {})
+            config["question_order"] = [str(question.id)]
+            session.config = config
+            await self.db.commit()
 
         if session.current_question_index >= len(question_order):
             await self.finish_session(session_id)
@@ -119,9 +150,106 @@ class VivaOrchestrator:
             return None
 
         session.current_question_index += 1
+        config = dict(session.config or {})
+        asked_ids = list(config.get("asked_question_ids", []))
+        asked_ids.append(str(question.id))
+        config["asked_question_ids"] = asked_ids
+        coverage = dict(config.get("topic_coverage", {}))
+        coverage[str(question.topic_id)] = "in_progress"
+        config["topic_coverage"] = coverage
+        session.config = config
         await self.db.commit()
         await self.db.refresh(session)
         return question
+
+    async def _generate_initial_question(self, session: VivaSession) -> Question | None:
+        """Create the first question from saved syllabus context when no approved bank item fits."""
+        course = await self.db.scalar(select(Course).where(Course.id == session.course_id))
+        if course is None:
+            raise RuntimeError("Interview course could not be loaded.")
+        if not course.syllabus_text and not course.syllabus_analysis:
+            raise RuntimeError(
+                "This course has no saved syllabus. Ask the teacher to add and analyze it first."
+            )
+        allowed_topics = list((session.config or {}).get("topic_ids", []))
+        topic_query = select(Topic).where(Topic.course_id == course.id)
+        if allowed_topics:
+            topic_query = topic_query.where(
+                Topic.id.in_([uuid.UUID(item) for item in allowed_topics])
+            )
+        topic = await self.db.scalar(topic_query.order_by(Topic.sort_order).limit(1))
+        if topic is None:
+            raise RuntimeError("The selected course has no syllabus topics to interview on.")
+
+        syllabus_topics = []
+        source_excerpts = []
+        analysis = course.syllabus_analysis or {}
+        for module in analysis.get("modules", []):
+            for item in module.get("topics", []):
+                if item.get("name", "").casefold() == topic.name.casefold():
+                    syllabus_topics.append({"module": module.get("name"), **item})
+                    for reference in item.get("source_references", [])[:2]:
+                        start = reference.get("start")
+                        end = reference.get("end")
+                        if course.syllabus_text and isinstance(start, int) and isinstance(end, int):
+                            source_excerpts.append(course.syllabus_text[start:end][:4000])
+        context = {
+            "course": course.name,
+            "subject": course.subject or course.code,
+            "academic_level": course.academic_level,
+            "description": course.description,
+            "syllabus_topics": syllabus_topics,
+            "source_excerpts": source_excerpts,
+            "topic": topic.name,
+            "source_excerpt": (
+                (course.syllabus_text or "")[:5000]
+                if not syllabus_topics and course.syllabus_text
+                else None
+            ),
+        }
+        schema = {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string"},
+                "key_points": {"type": "array", "items": {"type": "string"}},
+                "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"]},
+            },
+            "required": ["question", "key_points", "difficulty"],
+            "additionalProperties": False,
+        }
+        prompt = (
+            "Create one oral interview question grounded only in the saved syllabus context. "
+            "Do not add facts or topics not present in it. Return a concise question and specific "
+            "expected answer concepts as JSON. If a difficulty is configured, use it.\n"
+            f"Configured difficulty: {(session.config or {}).get('difficulty') or 'adaptive'}\n"
+            f"Context: {json.dumps(context, ensure_ascii=False)}"
+        )
+        response = await get_provider().generate(prompt, schema=schema)
+        if not isinstance(response, dict):
+            raise RuntimeError("Groq returned an invalid initial question.")
+        question_text = response.get("question")
+        key_points = response.get("key_points")
+        if (
+            not isinstance(question_text, str)
+            or not question_text.strip()
+            or not isinstance(key_points, list)
+            or not key_points
+            or any(not isinstance(point, str) for point in key_points)
+        ):
+            raise RuntimeError("Groq returned an incomplete initial question.")
+        try:
+            difficulty = QuestionDifficulty(response.get("difficulty", "medium"))
+        except ValueError as exc:
+            raise RuntimeError("Groq returned an invalid initial question difficulty.") from exc
+        return Question(
+            topic_id=topic.id,
+            question_text=question_text.strip(),
+            expected_key_points=[point.strip() for point in key_points if point.strip()],
+            difficulty=difficulty,
+            is_approved=True,
+            generated_by=None,
+            prompt_version="syllabus_interview_v1",
+        )
 
     async def finish_session(self, session_id: uuid.UUID) -> dict[str, Any]:
         """Compute the final weighted score and mark the session complete."""
@@ -138,7 +266,11 @@ class VivaOrchestrator:
             scores = [
                 answer.fused_score
                 if answer.fused_score is not None
-                else (answer.llm_score if answer.llm_score is not None else answer.embedding_score or 0.0)
+                else (
+                    answer.llm_score
+                    if answer.llm_score is not None
+                    else answer.embedding_score or 0.0
+                )
                 for answer in answers
             ]
             total_score = sum(scores) / len(scores)
@@ -185,7 +317,9 @@ class VivaOrchestrator:
         if chosen_question_id is None:
             raise ValueError("No available question for this session")
 
-        question_result = await self.db.execute(select(Question).where(Question.id == chosen_question_id))
+        question_result = await self.db.execute(
+            select(Question).where(Question.id == chosen_question_id)
+        )
         question = question_result.scalar_one_or_none()
         if question is None:
             raise ValueError("Question not found")
@@ -208,7 +342,11 @@ class VivaOrchestrator:
             key_points=question.expected_key_points,
         )
 
-        existing_answers = (await self.db.execute(select(Answer).where(Answer.session_id == session_id))).scalars().all()
+        existing_answers = (
+            (await self.db.execute(select(Answer).where(Answer.session_id == session_id)))
+            .scalars()
+            .all()
+        )
         next_sequence = len(existing_answers) + 1
         answer = Answer(
             session_id=session.id,
@@ -244,7 +382,7 @@ class VivaOrchestrator:
         previous_question: str | None = None,
         transcript: str | None = None,
     ) -> Question | None:
-        """Create and queue a locally generated follow-up when the answer needs probing."""
+        """Create and queue a Groq-generated follow-up when the answer needs probing."""
         session = await self._get_session(session_id)
         if session is None:
             raise ValueError("Session not found")
@@ -268,11 +406,15 @@ class VivaOrchestrator:
             "Return the requested JSON object."
         )
         response = await get_provider().generate(prompt, schema=schema)
-        followup_text = str(response.get("question", "")).strip() if isinstance(response, dict) else ""
+        followup_text = (
+            str(response.get("question", "")).strip() if isinstance(response, dict) else ""
+        )
         if not followup_text:
             return None
         key_points = response.get("key_points", points) if isinstance(response, dict) else points
-        difficulty_name = response.get("difficulty", "easy") if isinstance(response, dict) else "easy"
+        difficulty_name = (
+            response.get("difficulty", "easy") if isinstance(response, dict) else "easy"
+        )
         try:
             difficulty = QuestionDifficulty(difficulty_name)
         except ValueError:
@@ -285,7 +427,9 @@ class VivaOrchestrator:
                         await self.db.execute(
                             select(Topic.id).where(Topic.course_id == session.course_id).limit(1)
                         )
-                    ).scalars().all()
+                    )
+                    .scalars()
+                    .all()
                 ),
                 None,
             ),

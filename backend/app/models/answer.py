@@ -4,7 +4,18 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -19,6 +30,9 @@ class Answer(Base):
     """An answer submitted by a student to a specific viva question."""
 
     __tablename__ = "answers"
+    __table_args__ = (
+        Index("uq_answers_session_question", "session_id", "question_id", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),

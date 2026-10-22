@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.database import AsyncSessionLocal
 from app.models.consent import Consent
 from app.models.course import Course
+from app.models.question import Question, QuestionDifficulty
 from app.models.topic import Topic
 from app.models.user import User, UserRole
 from app.services.auth_service import hash_password
@@ -82,23 +83,137 @@ async def seed_database() -> None:
             ("Graph Traversal Algorithms", 3),
             ("Sorting & Dynamic Programming", 4),
         ]
+        topic_ids = {}
         for name, order in topics_data:
             t_res = await session.execute(
                 select(Topic).where(Topic.course_id == course.id, Topic.name == name)
             )
-            if not t_res.scalar_one_or_none():
+            topic = t_res.scalar_one_or_none()
+            if topic is None:
                 topic = Topic(
                     course_id=course.id,
                     name=name,
                     sort_order=order,
                 )
                 session.add(topic)
+                await session.flush()
                 print(f"  [+] Added Topic: {name}")
+            topic_ids[name] = topic.id
         await session.commit()
 
-        # 5. Create Initial Student Consent
+        # 5. Add approved questions so the seeded course can be used for a viva.
+        questions_data = [
+            (
+                "Arrays, Stacks & Queues",
+                "How does a stack differ from a queue, and what operations does each support?",
+                [
+                    "stack uses last-in first-out",
+                    "queue uses first-in first-out",
+                    "push and pop",
+                    "enqueue and dequeue",
+                ],
+                QuestionDifficulty.EASY,
+            ),
+            (
+                "Arrays, Stacks & Queues",
+                "When would you choose a linked list over an array, and what trade-offs does that introduce?",
+                [
+                    "dynamic size",
+                    "insertion and deletion without shifting",
+                    "no constant-time indexed access",
+                    "extra pointer memory",
+                ],
+                QuestionDifficulty.MEDIUM,
+            ),
+            (
+                "Trees & Binary Search Trees",
+                "What property makes a binary search tree useful, and what is its worst-case search complexity?",
+                [
+                    "left values are smaller",
+                    "right values are larger",
+                    "average logarithmic search",
+                    "worst case linear when unbalanced",
+                ],
+                QuestionDifficulty.MEDIUM,
+            ),
+            (
+                "Trees & Binary Search Trees",
+                "How can balancing a binary search tree improve its performance?",
+                [
+                    "limits tree height",
+                    "keeps operations logarithmic",
+                    "rotations preserve search order",
+                ],
+                QuestionDifficulty.HARD,
+            ),
+            (
+                "Graph Traversal Algorithms",
+                "Compare breadth-first search and depth-first search, including one use case for each.",
+                [
+                    "BFS explores level by level",
+                    "DFS explores a path deeply",
+                    "BFS finds shortest paths in unweighted graphs",
+                    "DFS supports cycle detection",
+                ],
+                QuestionDifficulty.MEDIUM,
+            ),
+            (
+                "Graph Traversal Algorithms",
+                "What data structures do breadth-first search and depth-first search typically use?",
+                [
+                    "BFS uses a queue",
+                    "DFS uses a stack or recursion",
+                    "visited set prevents repeated exploration",
+                ],
+                QuestionDifficulty.EASY,
+            ),
+            (
+                "Sorting & Dynamic Programming",
+                "How does merge sort work, and what are its time and auxiliary-space complexities?",
+                [
+                    "divide and conquer",
+                    "splits and merges sorted halves",
+                    "O(n log n) time",
+                    "O(n) auxiliary space",
+                ],
+                QuestionDifficulty.MEDIUM,
+            ),
+            (
+                "Sorting & Dynamic Programming",
+                "How does dynamic programming avoid repeated work, and when is it applicable?",
+                [
+                    "overlapping subproblems",
+                    "optimal substructure",
+                    "memoization or tabulation",
+                    "stores and reuses results",
+                ],
+                QuestionDifficulty.HARD,
+            ),
+        ]
+        for topic_name, text, key_points, difficulty in questions_data:
+            q_res = await session.execute(
+                select(Question).where(
+                    Question.topic_id == topic_ids[topic_name],
+                    Question.question_text == text,
+                )
+            )
+            if q_res.scalar_one_or_none() is None:
+                session.add(
+                    Question(
+                        topic_id=topic_ids[topic_name],
+                        question_text=text,
+                        expected_key_points=key_points,
+                        difficulty=difficulty,
+                        is_approved=True,
+                        generated_by=teacher.id,
+                        prompt_version="seed_v1",
+                    )
+                )
+        await session.commit()
+
+        # 6. Create Initial Student Consent
         c_res = await session.execute(select(Consent).where(Consent.user_id == student.id))
-        if not c_res.scalar_one_or_none():
+        if c_res.scalars().first() is None:
             consent = Consent(
                 user_id=student.id,
                 audio_retention_consent=True,
