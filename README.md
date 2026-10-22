@@ -21,6 +21,7 @@ The application provides automated practice feedback for review. It is not a sub
 - [Tests and quality checks](#tests-and-quality-checks)
 - [Troubleshooting](#troubleshooting)
 - [Current limitations](#current-limitations)
+- [Contributing](#contributing)
 
 ## Features
 
@@ -320,7 +321,7 @@ Build the frontend from `frontend\`:
 npm run build
 ```
 
-The backend tests are configured with pytest and an isolated in-memory SQLite database. A Groq integration test is skipped unless a Groq API key is configured. The frontend package currently defines development, build, and preview scripts; it does not define a test or lint script.
+The backend tests are configured with pytest and an isolated in-memory SQLite database. A live Groq integration test runs when a Groq API key is configured and requires external network access. For an offline deterministic run, use `pytest -k "not actual_groq_model_integration"`; run the live check separately when intended. The frontend package currently defines development, build, and preview scripts; it does not define a test or lint script.
 
 ## Troubleshooting
 
@@ -339,3 +340,7 @@ The backend tests are configured with pytest and an isolated in-memory SQLite da
 - Camera behavior cues are optional, computed locally in the browser, and stored as session flags when consent is granted. The UI labels them as approximate context only; they do not affect interview scores.
 - The candidate report exposes the overall score, per-answer score, transcript, and numeric rubric breakdown. It does not currently provide a separate topic-by-topic mastery report or written strengths/weaknesses summary.
 - Uploaded document processing and question generation are supported by backend endpoints, but document upload controls are not present in the current teacher dashboard.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development standards, test commands, security practices, and pull request evidence requirements.
