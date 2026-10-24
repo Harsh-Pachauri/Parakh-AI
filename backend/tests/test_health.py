@@ -66,6 +66,15 @@ async def test_ai_health_check_success(client: AsyncClient, monkeypatch) -> None
         ),
     )
 
+    monkeypatch.setattr(
+        "app.llm.groq.get_settings",
+        lambda: SimpleNamespace(
+            GROQ_API_KEY="test-key",
+            GROQ_MODEL="openai/gpt-oss-120b",
+            GROQ_TIMEOUT_SECONDS=5,
+        ),
+    )
+
     async def mock_generate(self, prompt, schema=None, stream=False):
         return {"text": "READY"}
 
