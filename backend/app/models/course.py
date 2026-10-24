@@ -10,6 +10,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.assessment import Assessment
+    from app.models.assignment import Assignment
     from app.models.topic import Topic
     from app.models.user import User
     from app.models.viva_session import VivaSession
@@ -71,6 +73,17 @@ class Course(Base):
     )
     viva_sessions: Mapped[list["VivaSession"]] = relationship(
         "VivaSession",
+        back_populates="course",
+        cascade="all, delete-orphan",
+    )
+    assessments: Mapped[list["Assessment"]] = relationship(
+        "Assessment",
+        back_populates="course",
+        cascade="all, delete-orphan",
+    )
+
+    assignments: Mapped[list["Assignment"]] = relationship(
+        "Assignment",
         back_populates="course",
         cascade="all, delete-orphan",
     )

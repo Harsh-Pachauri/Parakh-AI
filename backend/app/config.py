@@ -7,7 +7,11 @@ from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Load variables from the .env file into the system environment
+# Load variables from available .env files
+_root_env = Path(__file__).resolve().parents[2] / ".env"
+_backend_env = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(_root_env)
+load_dotenv(_backend_env)
 load_dotenv()
 
 
@@ -15,12 +19,17 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""
 
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parents[2] / ".env",
+        env_file=(
+            _root_env,
+            _backend_env,
+            ".env",
+        ),
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    APP_NAME: str = "AI Viva Voce System"
+    APP_NAME: str = "Parakh AI"
+    ENVIRONMENT: str = "development"
     DEBUG: bool = False
     SQL_ECHO: bool = False
     API_V1_STR: str = "/api"
@@ -33,7 +42,12 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./viva.db"
 
     # CORS
-    CORS_ORIGINS: list[str] | str = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    CORS_ORIGINS: list[str] | str = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ]
 
     # Groq-hosted language model
     GROQ_API_KEY: str | None = None
@@ -41,6 +55,19 @@ class Settings(BaseSettings):
     GROQ_TIMEOUT_SECONDS: float = 45.0
     GROQ_STT_MODEL: str = "whisper-large-v3-turbo"
     WHISPER_MODEL: str = "base"
+
+    # Storage and upload limits (in megabytes)
+    MAX_UPLOAD_SIZE_MB: int = 25
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _anchor_sqlite_path(cls, v: str) -> str:
+        """Resolve relative SQLite paths against backend/ so every entry point shares one DB."""
+        prefix = "sqlite+aiosqlite:///./"
+        if v.startswith(prefix):
+            db = Path(__file__).resolve().parents[1] / v[len(prefix) :]
+            return f"sqlite+aiosqlite:///{db.as_posix()}"
+        return v
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -51,6 +78,14 @@ class Settings(BaseSettings):
         elif isinstance(v, (list, str)):
             return v  # type: ignore[return-value]
         raise ValueError(f"Invalid CORS_ORIGINS format: {v}")
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
+        """Validate that SECRET_KEY meets minimum entropy requirement."""
+        if not v or len(v.strip()) < 16:
+            raise ValueError("SECRET_KEY must be at least 16 characters long.")
+        return v.strip()
 
 
 @lru_cache

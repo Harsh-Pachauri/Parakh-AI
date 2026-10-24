@@ -9,7 +9,7 @@ export default function Login({ navigate }) {
   const [busy, setBusy] = useState(false)
   const submit = async (event) => {
     event.preventDefault(); setBusy(true); setError('')
-    try { const user = await login(email, password); navigate(user.role === 'teacher' ? '/teacher' : '/') }
+    try { const user = await login(email, password); navigate(user.role === 'admin' ? '/admin' : (user.role === 'institution_admin' ? '/institution' : (user.role === 'teacher' ? '/teacher' : '/'))) }
     catch (err) { setError(err.userMessage || 'Unable to sign in. Check your details and try again.') }
     finally { setBusy(false) }
   }

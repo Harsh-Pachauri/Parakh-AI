@@ -17,16 +17,21 @@ class VivaConfig(BaseModel):
     follow_up_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
     difficulty: Literal["easy", "medium", "hard"] | None = None
     topic_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
+    question_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
 
 
 class VivaStartRequest(BaseModel):
     """Student-selected course and bounded interview settings."""
 
-    course_id: uuid.UUID
+    course_id: uuid.UUID | None = None
+    assessment_id: uuid.UUID | None = None
+    assignment_id: uuid.UUID | None = None
     max_questions: int | None = Field(default=None, ge=1, le=10)
     max_duration_sec: int | None = Field(default=None, ge=60, le=7200)
     difficulty: Literal["easy", "medium", "hard"] | None = None
     topic_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
+    is_adaptive: bool | None = None
+    practice_mode: Literal["adaptive", "targeted", "standard"] | None = None
 
 
 class BehaviorFlagCreate(BaseModel):
@@ -50,6 +55,7 @@ class VivaQuestionResponse(BaseModel):
     session_id: uuid.UUID
     question_id: uuid.UUID
     question_text: str
+    opening_greeting: str | None = None
     expected_key_points: list[str] = Field(default_factory=list)
     difficulty: str = "medium"
     current_question_index: int = 0

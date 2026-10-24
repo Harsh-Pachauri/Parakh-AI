@@ -31,6 +31,15 @@ def _get_client(api_key: str, timeout: float) -> AsyncGroq:
     return AsyncGroq(api_key=api_key, timeout=timeout, max_retries=1)
 
 
+def _supports_reasoning_effort(model: str) -> bool:
+    """Determine whether the model ID indicates support for reasoning_effort."""
+    model_lower = (model or "").lower()
+    return any(
+        token in model_lower
+        for token in ("deepseek-r1", "o1", "o3", "reasoner", "reasoning", "gpt-oss")
+    )
+
+
 class GroqProvider(LLMProvider):
     """Provider that sends chat completions only to Groq."""
 
@@ -59,18 +68,21 @@ class GroqProvider(LLMProvider):
                 },
             )
 
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 1,
+            "max_completion_tokens": 2048,
+            "top_p": 1,
+            "response_format": {"type": "json_object"} if schema is not None else None,
+            "stream": stream,
+            "stop": None,
+        }
+        if _supports_reasoning_effort(self.model):
+            kwargs["reasoning_effort"] = "medium"
+
         try:
-            completion = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=1,
-                max_completion_tokens=2048,
-                top_p=1,
-                reasoning_effort="medium",
-                response_format={"type": "json_object"} if schema is not None else None,
-                stream=stream,
-                stop=None,
-            )
+            completion = await self.client.chat.completions.create(**kwargs)
             if stream:
                 chunks: list[str] = []
                 async for chunk in completion:

@@ -42,6 +42,9 @@ async def delete_user_audio(
             file_path = Path(answer.audio_path)
             if file_path.exists():
                 file_path.unlink()
+            wav_path = file_path.with_suffix(".wav")
+            if wav_path != file_path and wav_path.exists():
+                wav_path.unlink()
             deleted_count += 1
             answer.audio_path = None
 

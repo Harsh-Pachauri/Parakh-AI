@@ -6,6 +6,7 @@ import useLiveInterview from '../hooks/useLiveInterview'
 import apiClient from '../api/client'
 import ConsentModal from '../components/ConsentModal'
 import Timer from '../components/Timer'
+import { getVivaOpeningGreeting } from '../utils/conversationalHelpers'
 import '../live-interview.css'
 
 const mediaConstraints = (cameraId, microphoneId) => ({
@@ -38,7 +39,8 @@ function mediaErrorMessage(error) {
   return error.message || 'Could not initialize the camera and microphone. Check device permissions and retry.'
 }
 
-export default function VivaScreen({ navigate, courseId }) {
+export default function VivaScreen({ navigate, courseId, topicId, assessmentId, assignmentId }) {
+  const [assessmentTitle, setAssessmentTitle] = useState('')
   const viva = useViva()
   const { user } = useAuth()
   const [step, setStep] = useState('consent')
@@ -227,8 +229,30 @@ export default function VivaScreen({ navigate, courseId }) {
     let session
     try {
       await acquireMedia()
-      await apiClient.get('/api/health/ai')
-      session = await viva.startSession(courseId ? { course_id: courseId } : {})
+      try {
+        await apiClient.get('/api/health/ai')
+      } catch (healthError) {
+        const status = healthError.response?.status
+        const detail = healthError.response?.data?.detail || healthError.userMessage || ''
+        const isConfigOrAuthError =
+          status === 401 ||
+          status === 403 ||
+          detail.includes('GROQ_API_KEY is not configured') ||
+          detail.includes('authentication failed')
+
+        if (isConfigOrAuthError) {
+          throw healthError
+        }
+        console.warn('AI health probe encountered a transient issue; continuing with viva session:', detail)
+      }
+      const startPayload = {}
+      if (courseId) startPayload.course_id = courseId
+      if (topicId) startPayload.topic_ids = [topicId]
+      if (assessmentId) startPayload.assessment_id = assessmentId
+      if (assignmentId) startPayload.assignment_id = assignmentId
+      session = await viva.startSession(startPayload)
+      if (session.assignment_title) setAssessmentTitle(session.assignment_title)
+      else if (session.assessment_title) setAssessmentTitle(session.assessment_title)
       setInterviewLimits({
         maxQuestions: session.max_questions || 5,
         durationSec: session.max_duration_sec || 900,
@@ -247,7 +271,9 @@ export default function VivaScreen({ navigate, courseId }) {
       }
       setStartedAt(Date.now())
       setStep('interview')
-      void conversation.ask(question.question_text)
+      const opening = question.opening_greeting || getVivaOpeningGreeting(user?.full_name, !assessmentId && !assignmentId, assessmentTitle)
+      const spokenText = opening ? `${opening} ${question.question_text}` : question.question_text
+      void conversation.ask(spokenText)
     } catch (error) {
       streamRef.current?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
@@ -448,7 +474,7 @@ export default function VivaScreen({ navigate, courseId }) {
           )}
 
           <section className="live-question" aria-live="polite">
-            <span className="eyebrow">CURRENT QUESTION</span>
+            <span className="eyebrow">{assessmentTitle ? `ASSESSMENT: ${assessmentTitle.toUpperCase()}` : 'CURRENT QUESTION'}</span>
             <h2>{viva.currentQuestion?.question_text || 'The interviewer is preparing the next question.'}</h2>
             <button
               className="live-control repeat-question"

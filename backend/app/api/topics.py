@@ -57,8 +57,15 @@ async def list_topics(
 ) -> list[TopicResponse]:
     """List all topics for a given course."""
     course_query = await db.execute(select(Course).where(Course.id == course_id))
-    if course_query.scalar_one_or_none() is None:
+    course = course_query.scalar_one_or_none()
+    if course is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    if current_user.role == UserRole.TEACHER and course.teacher_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to view topics for this course",
+        )
 
     result = await db.execute(
         select(Topic).where(Topic.course_id == course_id).order_by(Topic.sort_order)

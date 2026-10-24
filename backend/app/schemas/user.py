@@ -33,6 +33,7 @@ class UserResponse(BaseModel):
     email: str
     role: UserRole
     full_name: str
+    institution_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -114,7 +114,11 @@ def test_faiss_index_build_and_retrieve_for_topic(tmp_path):
 
 def test_pdf_extraction_from_real_fixture():
     """Extracting text from the sample syllabus PDF should retrieve all course topics."""
-    pdf_path = Path("tests/fixtures/sample_syllabus.pdf")
+    pdf_path = (
+        Path("backend/tests/fixtures/sample_syllabus.pdf")
+        if Path("backend/tests/fixtures/sample_syllabus.pdf").exists()
+        else Path("tests/fixtures/sample_syllabus.pdf")
+    )
     assert pdf_path.exists(), "Sample syllabus fixture must exist"
 
     file_bytes = pdf_path.read_bytes()
