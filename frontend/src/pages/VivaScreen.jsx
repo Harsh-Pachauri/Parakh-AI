@@ -362,7 +362,7 @@ export default function VivaScreen({ navigate, courseId, topicId, assessmentId, 
             <button className="button secondary" onClick={() => setMediaError('')}>Dismiss</button>
           </main>
         )}
-        <ConsentModal busy={busy} onBegin={begin} />
+        <ConsentModal busy={busy} onBegin={begin} onClose={() => navigate('/')} />
       </>
     )
   }

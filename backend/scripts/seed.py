@@ -337,6 +337,59 @@ async def seed() -> None:
             seeded_questions.append(question)
         await db.commit()
 
+        # CS301 topics and questions so its practice viva can start
+        os_data = {
+            "Processes & Threads": [
+                ("What is the difference between a process and a thread?",
+                 ["process has its own address space", "threads share memory within a process", "context switch cost differs"],
+                 QuestionDifficulty.EASY),
+                ("What happens during a context switch and why is it costly?",
+                 ["save and restore CPU state", "scheduler picks next task", "cache and TLB effects"],
+                 QuestionDifficulty.MEDIUM),
+            ],
+            "Deadlocks & Synchronization": [
+                ("What are the four necessary conditions for deadlock?",
+                 ["mutual exclusion", "hold and wait", "no preemption", "circular wait"],
+                 QuestionDifficulty.MEDIUM),
+                ("How does a semaphore differ from a mutex?",
+                 ["semaphore is a counter", "mutex has an owner", "binary semaphore is not a mutex"],
+                 QuestionDifficulty.MEDIUM),
+            ],
+            "Virtual Memory": [
+                ("What is paging and how does a page fault get handled?",
+                 ["fixed-size pages and frames", "page table translation", "OS loads page from disk on fault"],
+                 QuestionDifficulty.HARD),
+            ],
+        }
+        for order, (tname, qs) in enumerate(os_data.items(), start=1):
+            t_res = await db.execute(
+                select(Topic).where(Topic.course_id == course_cs301.id, Topic.name == tname)
+            )
+            os_topic = t_res.scalar_one_or_none()
+            if not os_topic:
+                os_topic = Topic(course_id=course_cs301.id, name=tname, sort_order=order)
+                db.add(os_topic)
+                await db.flush()
+            for text, key_points, difficulty in qs:
+                q_res = await db.execute(
+                    select(Question).where(
+                        Question.topic_id == os_topic.id, Question.question_text == text
+                    )
+                )
+                if not q_res.scalar_one_or_none():
+                    db.add(
+                        Question(
+                            topic_id=os_topic.id,
+                            question_text=text,
+                            expected_key_points=key_points,
+                            difficulty=difficulty,
+                            is_approved=True,
+                            generated_by=teacher.id,
+                            prompt_version="seed_v2",
+                        )
+                    )
+        await db.commit()
+
         # 7. Custom Assessment & Scheduled Assignment
         print("\n[7/8] Seeding Custom Assessment & Assignment...")
         asst_res = await db.execute(

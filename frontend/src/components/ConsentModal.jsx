@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import MicCheck from './MicCheck'
 
-export default function ConsentModal({ onBegin, busy }) {
+export default function ConsentModal({ onBegin, onClose, busy }) {
   const [cameraConsent, setCameraConsent] = useState(false)
   const [retainAudio, setRetainAudio] = useState(false)
   const [micReady, setMicReady] = useState(false)
@@ -17,6 +17,11 @@ export default function ConsentModal({ onBegin, busy }) {
   return (
     <div className="modal-backdrop" role="presentation">
       <section className="modal" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+        {onClose && (
+          <button type="button" className="modal-close" aria-label="Close" onClick={onClose}>
+            ×
+          </button>
+        )}
         <span className="eyebrow">Before you begin</span>
         <h2 id="consent-title">Your voice, your choice</h2>
         <p>

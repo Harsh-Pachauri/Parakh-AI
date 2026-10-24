@@ -48,7 +48,7 @@ export default function FeedbackReport({ sessionId, navigate }) {
     <main className="page-shell report-shell">
       <p className="eyebrow">SESSION COMPLETE</p>
       <h1>Your practice, reflected.</h1>
-      <p className="muted" style={{ fontSize: '0.98rem', color: '#cbd5e1', marginBottom: '24px', lineHeight: 1.5 }}>
+      <p className="muted" style={{ fontSize: '0.98rem', color: 'var(--muted)', marginBottom: '24px', lineHeight: 1.5 }}>
         {getCompletionClosingMessage(report.total_score, report.student_name, report.answers?.length)}
       </p>
 
@@ -66,7 +66,7 @@ export default function FeedbackReport({ sessionId, navigate }) {
       </section>
 
       {report.adaptive_summary && (
-        <section className="adaptive-summary-card" style={{ marginBottom: '28px', padding: '20px', background: 'var(--surface-color, #1e293b)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <section className="adaptive-summary-card" style={{ marginBottom: '28px', padding: '20px', background: 'var(--paper)', borderRadius: '12px', border: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '1.2rem' }}>🎯</span>
@@ -75,7 +75,7 @@ export default function FeedbackReport({ sessionId, navigate }) {
             <span className="status-tag completed" style={{ fontSize: '0.8rem' }}>AI Adaptive Viva</span>
           </div>
 
-          <p style={{ margin: '0 0 16px 0', fontSize: '0.95rem', color: '#94a3b8' }}>
+          <p style={{ margin: '0 0 16px 0', fontSize: '0.95rem', color: 'var(--muted)' }}>
             {summaryStats.note}
           </p>
 
@@ -91,7 +91,7 @@ export default function FeedbackReport({ sessionId, navigate }) {
                         Q{idx + 1}: {badge.label}
                       </span>
                       {idx < report.adaptive_summary.difficulty_progression.length - 1 && (
-                        <span style={{ color: '#64748b' }}>➔</span>
+                        <span style={{ color: 'var(--muted)' }}>➔</span>
                       )}
                     </div>
                   )
@@ -105,10 +105,10 @@ export default function FeedbackReport({ sessionId, navigate }) {
               <span className="eyebrow" style={{ display: 'block', marginBottom: '8px' }}>TOPICS PRACTICED</span>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
                 {report.adaptive_summary.topics_practiced.map((tp) => (
-                  <div key={tp.topic_id} style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div key={tp.topic_id} style={{ padding: '10px 14px', background: 'var(--soft)', borderRadius: '8px', border: '1px solid var(--line)' }}>
                     <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px' }}>{tp.topic_name}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                      {tp.questions_count} question{tp.questions_count > 1 ? 's' : ''} · Avg: <b style={{ color: '#f8fafc' }}>{tp.average_score_percent}</b>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                      {tp.questions_count} question{tp.questions_count > 1 ? 's' : ''} · Avg: <b style={{ color: 'var(--ink)' }}>{tp.average_score_percent}</b>
                     </div>
                   </div>
                 ))}
@@ -118,10 +118,10 @@ export default function FeedbackReport({ sessionId, navigate }) {
 
           {report.adaptive_summary.topics_showing_improvement?.length > 0 && (
             <div style={{ marginBottom: '18px' }}>
-              <span className="eyebrow" style={{ display: 'block', marginBottom: '8px', color: '#10b981' }}>📈 TOPICS SHOWING IMPROVEMENT</span>
+              <span className="eyebrow" style={{ display: 'block', marginBottom: '8px', color: 'var(--green)' }}>📈 TOPICS SHOWING IMPROVEMENT</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {report.adaptive_summary.topics_showing_improvement.map((ti) => (
-                  <div key={ti.topic_id} style={{ padding: '8px 12px', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '6px', borderLeft: '3px solid #10b981', fontSize: '0.88rem' }}>
+                  <div key={ti.topic_id} style={{ padding: '8px 12px', background: '#e8f3ee', borderRadius: '6px', borderLeft: '3px solid var(--green)', fontSize: '0.88rem' }}>
                     <b>{ti.topic_name}</b>: Score improved from {ti.initial_score_percent} to <b>{ti.final_score_percent}</b> ({ti.delta_percent}). {ti.insight}
                   </div>
                 ))}
@@ -131,10 +131,10 @@ export default function FeedbackReport({ sessionId, navigate }) {
 
           {report.adaptive_summary.topics_needing_attention?.length > 0 && (
             <div style={{ marginBottom: '18px' }}>
-              <span className="eyebrow" style={{ display: 'block', marginBottom: '8px', color: '#f59e0b' }}>⚠️ TOPICS STILL NEEDING ATTENTION</span>
+              <span className="eyebrow" style={{ display: 'block', marginBottom: '8px', color: '#b27a31' }}>⚠️ TOPICS STILL NEEDING ATTENTION</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {report.adaptive_summary.topics_needing_attention.map((ta) => (
-                  <div key={ta.topic_id} style={{ padding: '8px 12px', background: 'rgba(245, 158, 11, 0.08)', borderRadius: '6px', borderLeft: '3px solid #f59e0b', fontSize: '0.88rem' }}>
+                  <div key={ta.topic_id} style={{ padding: '8px 12px', background: '#faf1e4', borderRadius: '6px', borderLeft: '3px solid #b27a31', fontSize: '0.88rem' }}>
                     <b>{ta.topic_name}</b> (Average {ta.average_score_percent}): {ta.recommendation}
                   </div>
                 ))}

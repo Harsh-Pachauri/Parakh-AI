@@ -87,7 +87,7 @@ class EmbeddingSimilarityScorer:
 class LLMJudgeScorer:
     """Ask an LLM to score a transcript against rubric criteria."""
 
-    def __init__(self, provider: Any | None = None, max_retries: int = 1) -> None:
+    def __init__(self, provider: Any | None = None, max_retries: int = 2) -> None:
         self.provider = provider
         self.max_retries = max_retries
 
@@ -161,7 +161,7 @@ class LLMJudgeScorer:
                 response = await provider.generate(request_prompt, schema=self._schema())
                 if not isinstance(response, dict):
                     raise ValueError("Groq judge returned a non-object response.")
-                required = {"correctness", "completeness", "clarity", "justification"}
+                required = {"correctness", "completeness", "clarity"}
                 if not required.issubset(response):
                     raise ValueError("Groq judge omitted required rubric fields.")
 
@@ -169,7 +169,9 @@ class LLMJudgeScorer:
                     "correctness": float(response["correctness"]),
                     "completeness": float(response["completeness"]),
                     "clarity": float(response["clarity"]),
-                    "justification": str(response["justification"])[:1000],
+                    "justification": str(
+                        response.get("justification") or "No justification provided."
+                    )[:1000],
                 }
                 rubric = RubricScore(**normalization)
                 rubric.llm_score = float(
@@ -182,9 +184,16 @@ class LLMJudgeScorer:
                 last_error = exc
                 logger.warning("Groq judge response failed schema validation: %s", exc)
 
-        raise RuntimeError(
-            f"Groq answer evaluation returned invalid rubric data: {last_error}"
-        ) from last_error
+        # The judge kept returning unusable output (often for non-answers such as "can we move
+        # on?"). Record a conservative score instead of blocking the whole interview.
+        logger.error("Groq judge output invalid after retries: %s", last_error)
+        return RubricScore(
+            correctness=0.0,
+            completeness=0.0,
+            clarity=0.0,
+            justification="Automatic scoring could not evaluate this response; flagged for teacher review.",
+            llm_score=0.0,
+        )
 
 
 class ScoreFusion:
