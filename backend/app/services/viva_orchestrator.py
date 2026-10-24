@@ -16,6 +16,7 @@ from app.models.question import Question, QuestionDifficulty
 from app.models.topic import Topic
 from app.models.viva_session import VivaSession, VivaStatus
 from app.schemas.viva import VivaConfig
+from app.services.adaptive_service import AdaptiveVivaService
 from app.services.eval_service import evaluate_answer
 from app.services.llm_service import get_provider
 from app.services.speech_service import SpeechService
@@ -82,9 +83,17 @@ class VivaOrchestrator:
         """Create a viva session and cache the initial order of reusable questions."""
         viva_config = config or VivaConfig()
         topic_ids = [str(item) for item in viva_config.topic_ids]
-        question_order = await self._course_question_ids(
-            course_id, viva_config.difficulty, topic_ids
-        )
+        is_fixed = bool(viva_config.question_ids)
+        if is_fixed:
+            question_order = [uuid.UUID(str(item)) for item in viva_config.question_ids]
+            is_adaptive = False
+            practice_mode = "fixed"
+        else:
+            question_order = await self._course_question_ids(
+                course_id, viva_config.difficulty, topic_ids
+            )
+            is_adaptive = True
+            practice_mode = "targeted" if len(topic_ids) == 1 else "adaptive"
 
         session = VivaSession(
             student_id=student_id,
@@ -101,6 +110,10 @@ class VivaOrchestrator:
                 "follow_up_threshold": viva_config.follow_up_threshold,
                 "difficulty": viva_config.difficulty,
                 "topic_ids": topic_ids,
+                "is_adaptive": is_adaptive,
+                "practice_mode": practice_mode,
+                "difficulty_progression": [],
+                "topics_practiced": [],
                 "asked_question_ids": [],
                 "topic_coverage": {},
                 "follow_up_depth": 0,
@@ -124,6 +137,49 @@ class VivaOrchestrator:
             await self.finish_session(session_id)
             return None
 
+        # Adaptive session path: dynamic question selection based on student performance
+        if AdaptiveVivaService.is_adaptive_session(session):
+            question = await AdaptiveVivaService.get_next_adaptive_question(self.db, session)
+            if question is None:
+                # Check if question_order has an unasked question before syllabus generation
+                question_order = [
+                    uuid.UUID(value)
+                    for value in (session.config or {}).get("question_order", [])
+                    if value
+                ]
+                asked = set((session.config or {}).get("asked_question_ids", []))
+                for qid in question_order:
+                    if str(qid) not in asked:
+                        q_res = await self.db.execute(select(Question).where(Question.id == qid))
+                        q_obj = q_res.scalar_one_or_none()
+                        if q_obj:
+                            question = q_obj
+                            break
+
+            if question is None:
+                question = await self._generate_initial_question(session)
+                if question is not None:
+                    self.db.add(question)
+                    await self.db.flush()
+            if question is None:
+                await self.finish_session(session_id)
+                return None
+
+            session.current_question_index += 1
+            config = dict(session.config or {})
+            asked_ids = list(config.get("asked_question_ids", []))
+            if str(question.id) not in asked_ids:
+                asked_ids.append(str(question.id))
+            config["asked_question_ids"] = asked_ids
+            coverage = dict(config.get("topic_coverage", {}))
+            coverage[str(question.topic_id)] = "in_progress"
+            config["topic_coverage"] = coverage
+            session.config = config
+            await self.db.commit()
+            await self.db.refresh(session)
+            return question
+
+        # Fixed session path (assessments, assignments, or explicit question orders)
         question_order = await self._ensure_question_order(session)
         if not question_order:
             question = await self._generate_initial_question(session)
@@ -281,6 +337,11 @@ class VivaOrchestrator:
         session.status = VivaStatus.COMPLETED
         session.finished_at = datetime.now(UTC)
         session.current_question_index = max(session.current_question_index, len(answers))
+
+        adaptive_summary = None
+        if AdaptiveVivaService.is_adaptive_session(session):
+            adaptive_summary = await AdaptiveVivaService.generate_session_summary(self.db, session)
+
         await self.db.commit()
         await self.db.refresh(session)
 
@@ -290,6 +351,7 @@ class VivaOrchestrator:
             "total_score": session.total_score,
             "answers_count": len(answers),
             "finished_at": session.finished_at,
+            "adaptive_summary": adaptive_summary,
         }
 
     async def process_answer(
@@ -336,10 +398,13 @@ class VivaOrchestrator:
         transcript = clean_transcript(transcription.get("text", ""))
         transcript = anonymise(transcript)
 
+        key_points = question.expected_key_points or (
+            [question.explanation] if question.explanation else []
+        )
         evaluation = await evaluate_answer(
             question=question.question_text,
             transcript=transcript,
-            key_points=question.expected_key_points,
+            key_points=key_points,
         )
 
         existing_answers = (

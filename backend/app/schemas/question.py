@@ -21,6 +21,9 @@ class QuestionResponse(BaseModel):
 
     id: uuid.UUID
     topic_id: uuid.UUID
+    course_id: uuid.UUID | None = None
+    course_name: str | None = None
+    topic_name: str | None = None
     question_text: str
     expected_key_points: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)

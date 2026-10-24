@@ -104,3 +104,515 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.analytics-table th {
+  padding: 12px 14px;
+  color: #626b73;
+  font-weight: 700;
+  border-bottom: 1px solid var(--line);
+  background: #fbf9f6;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.analytics-table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+.analytics-table tr:hover td {
+  background: #fdfcf9;
+}
+.dist-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #e8e4dd;
+  margin: 12px 0 8px;
+}
+.dist-seg-mastery { background: #41765f; }
+.dist-seg-proficient { background: #719b88; }
+.dist-seg-developing { background: #d49547; }
+.dist-seg-attention { background: #a54439; }
+.dist-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: #626b73;
+  margin-top: 6px;
+}
+.dist-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dist-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.student-drilldown {
+  background: #fdfcfb;
+  border: 1px solid #d8c3b5;
+  border-radius: 9px;
+  padding: 24px;
+  margin-top: 20px;
+}
+.drilldown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+}
+
+
+/* Assignment Manager Styles (P2.11) */
+.assignment-manager-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.section-subtitle {
+  color: var(--muted);
+  font-size: 14px;
+  margin-top: 4px;
+}
+.stats-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.kpi-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kpi-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.kpi-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  background: #fff;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.search-box {
+  flex: 1;
+  min-width: 220px;
+}
+.search-box input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.filter-group select {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+}
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.custom-table th {
+  background: #fbf9f6;
+  padding: 12px 14px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.custom-table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink);
+  vertical-align: middle;
+}
+.cell-subtext {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.date-window {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: #77808a;
+}
+.action-buttons-inline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  padding: 9px 16px;
+  font-weight: 700;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+}
+.btn-secondary {
+  background: #f4f0e9;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.btn-outline {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.btn-danger-outline {
+  background: #fff;
+  color: var(--red);
+  border: 1px solid #ead3ce;
+}
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.modal-lg {
+  max-width: 680px;
+}
+.modal-xl {
+  max-width: 900px;
+}
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+.modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background: #faf8f5;
+}
+.status-tag.published { background: #e8f3ee; color: #41765f; }
+.status-tag.info { background: #f4eee8; color: #bc603e; }
+.status-tag.submitted { background: #f4eee8; color: #98482e; }
+.status-tag.danger { background: #fae8e5; color: #a54439; }
+.status-tag.draft { background: #f0eee9; color: #6d716f; }
+
+
+/* Detailed Reports Styles (P2.12) */
+.teacher-reports-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.report-card-section {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 20px;
+}
+.modal-actions-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.coaching-notice-box {
+  background: #faf7f2;
+  border-left: 4px solid var(--accent);
+  padding: 14px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #4a453f;
+  line-height: 1.5;
+}
+.dimension-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+.dimension-card {
+  background: #faf8f5;
+  border: 1px solid #e8e4dd;
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.dimension-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+.score-history-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.history-chip {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 90px;
+  gap: 2px;
+}
+.history-num {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.history-pct {
+  font-size: 18px;
+  color: var(--ink);
+  font-weight: 800;
+}
+.history-date {
+  font-size: 11px;
+  color: #77808a;
+}
+.history-course {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 600;
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tier-mastery { color: #41765f; font-weight: 700; }
+.tier-proficient { color: #5a8573; font-weight: 700; }
+.tier-developing { color: #c48332; font-weight: 700; }
+.tier-attention { color: #a54439; font-weight: 700; }
+.tier-unscored { color: var(--muted); }
+
+
+/* P2.13 Adaptive Difficulty and Summary Tags */
+.diff-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.diff-tag.easy {
+  background: rgba(16, 185, 129, 0.15);
+  color: #41765f;
+}
+.diff-tag.medium {
+  background: rgba(56, 189, 248, 0.15);
+  color: #bc603e;
+}
+.diff-tag.hard {
+  background: rgba(239, 68, 68, 0.15);
+  color: #a54439;
+}
+
+
+/* P2.15 Teacher Document Management & RAG Ingestion */
+.document-manager-card {
+  background: #ffffff;
+  border: 1px solid #e9e7e2;
+  border-radius: 8px;
+  padding: 20px;
+}
+.document-upload-box {
+  background: #faf8f5;
+  border: 1px dashed #e9e7e2;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 12px;
+}
+.upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+.file-selector-label {
+  display: inline-block;
+  cursor: pointer;
+  font-size: 14px;
+  color: #252a30;
+}
+.file-selector-label input[type="file"] {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #77808a;
+}
+.file-info-muted {
+  font-size: 12px;
+  color: #77808a;
+}
+.selected-file-preview {
+  margin-top: 6px;
+  padding: 6px 12px;
+  background: #f4eee8;
+  border: 1px solid #e5d7cc;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #98482e;
+}
+.upload-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #e9e7e2;
+  padding-top: 12px;
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #535b60;
+  cursor: pointer;
+}
+.documents-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.documents-table th,
+.documents-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #faf8f5;
+  font-size: 13px;
+}
+.documents-table th {
+  background: #faf8f5;
+  color: #77808a;
+  font-weight: 600;
+}
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.status-pill.badge-ready {
+  background: #e8f3ee;
+  color: #41765f;
+  border: 1px solid #e8f3ee;
+}
+.status-pill.badge-pending {
+  background: #faf1e4;
+  color: #8a6941;
+  border: 1px solid #e5d7cc;
+}
+.status-pill.badge-failed {
+  background: #fae8e5;
+  color: #a54439;
+  border: 1px solid #f0b8b0;
+}
+.status-pill.badge-neutral {
+  background: #faf8f5;
+  color: #535b60;
+  border: 1px solid #e9e7e2;
+}
+.button-small {
+  padding: 5px 10px !important;
+  font-size: 12px !important;
+}

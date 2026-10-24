@@ -9,6 +9,8 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
+from app.config import get_settings
+
 
 class DocumentService:
     """Service helpers for handling uploaded document files."""
@@ -62,12 +64,21 @@ class DocumentService:
         file: UploadFile, topic_id: uuid.UUID, upload_dir: str | Path | None = None
     ) -> dict:
         """Persist the uploaded file to disk and return metadata for database storage."""
+        settings = get_settings()
+        max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
         destination = Path(upload_dir) if upload_dir is not None else Path("uploads")
         destination.mkdir(parents=True, exist_ok=True)
 
         filename = DocumentService._safe_filename(file.filename or "document.txt")
         persisted_path = destination / f"{uuid.uuid4()}_{filename}"
         content = await file.read()
+
+        if len(content) > max_bytes:
+            raise ValueError(
+                f"Uploaded document exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_MB}MB"
+            )
+
         persisted_path.write_bytes(content)
 
         content_hash = hashlib.sha256(content).hexdigest()

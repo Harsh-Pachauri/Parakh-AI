@@ -131,3 +131,34 @@ async def test_actual_groq_model_integration_when_credentials_are_available():
         pytest.skip("GROQ_API_KEY is not configured in this environment")
     result = await GroqProvider().generate("Reply with the single word READY.")
     assert result.get("text", "").strip().upper() == "READY"
+
+
+@pytest.mark.asyncio
+async def test_groq_provider_omits_reasoning_effort_for_standard_models(monkeypatch):
+    """Verify standard Groq chat models do not receive incompatible reasoning_effort parameter."""
+    captured = {}
+
+    async def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok": true}'))]
+        )
+
+    _get_client.cache_clear()
+    monkeypatch.setattr(
+        "app.llm.groq.get_settings",
+        lambda: SimpleNamespace(
+            GROQ_API_KEY="test-key",
+            GROQ_MODEL="llama-3.3-70b-versatile",
+            GROQ_TIMEOUT_SECONDS=3.0,
+        ),
+    )
+    provider = GroqProvider()
+    provider.client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    )
+
+    result = await provider.generate("Return JSON", schema={"type": "object"})
+    assert result == {"ok": True}
+    assert captured["model"] == "llama-3.3-70b-versatile"
+    assert "reasoning_effort" not in captured

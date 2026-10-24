@@ -18,6 +18,16 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context for startup and shutdown routines."""
+    current_settings = get_settings()
+    if current_settings.SECRET_KEY == "temporary-dev-secret-key-change-in-production-12345" and (
+        not current_settings.DEBUG or current_settings.ENVIRONMENT.lower() == "production"
+    ):
+        import logging
+
+        logging.getLogger("uvicorn.error").warning(
+            "CRITICAL SECURITY WARNING: Application is running with the default development SECRET_KEY. "
+            "Please generate and set a strong, unique SECRET_KEY in your environment for production deployments."
+        )
     yield
 
 
