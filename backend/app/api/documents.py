@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, require_role
+from app.models.course import Course
 from app.models.document import Document, DocumentStatus
 from app.models.topic import Topic
 from app.models.user import User, UserRole
@@ -37,9 +38,13 @@ async def upload_document(
     if topic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
 
-    if current_user.role == UserRole.TEACHER and topic.course_id is not None:
-        # topic.course is loaded lazily only when required; the DB write path ensures ownership.
-        pass
+    if current_user.role == UserRole.TEACHER:
+        owner_id = await db.scalar(select(Course.teacher_id).where(Course.id == topic.course_id))
+        if owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to upload documents to this topic",
+            )
 
     try:
         saved = await DocumentService.save_upload(file, topic_id)
@@ -72,8 +77,17 @@ async def list_documents(
 ) -> list[DocumentResponse]:
     """List every uploaded document for a topic."""
     topic_result = await db.execute(select(Topic).where(Topic.id == topic_id))
-    if topic_result.scalar_one_or_none() is None:
+    topic = topic_result.scalar_one_or_none()
+    if topic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+
+    if current_user.role == UserRole.TEACHER:
+        owner_id = await db.scalar(select(Course.teacher_id).where(Course.id == topic.course_id))
+        if owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to access documents for this topic",
+            )
 
     result = await db.execute(
         select(Document).where(Document.topic_id == topic_id).order_by(Document.created_at.desc())
@@ -93,6 +107,18 @@ async def embed_document(
     document = result.scalar_one_or_none()
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    if current_user.role == UserRole.TEACHER:
+        owner_id = await db.scalar(
+            select(Course.teacher_id)
+            .join(Topic, Topic.course_id == Course.id)
+            .where(Topic.id == document.topic_id)
+        )
+        if owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to embed this document",
+            )
 
     file_path = Path(document.file_path)
     if not file_path.exists():
@@ -125,6 +151,18 @@ async def delete_document(
     document = result.scalar_one_or_none()
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    if current_user.role == UserRole.TEACHER:
+        owner_id = await db.scalar(
+            select(Course.teacher_id)
+            .join(Topic, Topic.course_id == Course.id)
+            .where(Topic.id == document.topic_id)
+        )
+        if owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to delete this document",
+            )
 
     file_path = Path(document.file_path)
     if file_path.exists():
