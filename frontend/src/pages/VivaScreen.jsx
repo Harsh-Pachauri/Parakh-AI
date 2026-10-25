@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useBehaviorMonitor } from '../hooks/useBehaviorMonitor'
 import useLiveInterview from '../hooks/useLiveInterview'
 import apiClient from '../api/client'
+import { BrandMark } from '../components/Brand'
 import ConsentModal from '../components/ConsentModal'
 import Timer from '../components/Timer'
 import { getVivaOpeningGreeting } from '../utils/conversationalHelpers'
@@ -384,7 +385,7 @@ export default function VivaScreen({ navigate, courseId, topicId, assessmentId, 
       <header className="live-header">
         <button className="live-exit" onClick={endInterview}>← End interview</button>
         <div className="live-title">
-          <span className="brand-mark small">V<span>.</span></span>
+          <BrandMark size={30} />
           <div><strong>AI VIDEO INTERVIEW</strong><small>Private practice session</small></div>
         </div>
         <div className="live-status">
