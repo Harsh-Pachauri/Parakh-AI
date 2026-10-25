@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from './hooks/useAuth'
+import Brand from './components/Brand'
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import StudentDashboard from './pages/StudentDashboard'
@@ -12,6 +14,7 @@ import InstitutionAdminDashboard from './pages/InstitutionAdminDashboard'
 import QuestionBank from './pages/QuestionBank'
 import ConsentModal from './components/ConsentModal'
 import './App.css'
+import './call.css'
 
 function Workspace() {
   const { user, token, loading, logout } = useAuth()
@@ -46,6 +49,9 @@ function Workspace() {
   if (!token) {
     if (route === '/signup') {
       return <Register navigate={navigate} />
+    }
+    if (route !== '/login') {
+      return <Landing navigate={navigate} />
     }
     return (
       <Login
@@ -147,10 +153,7 @@ function Workspace() {
   return (
     <div className="app-shell">
       <nav className="site-nav">
-        <span className="nav-brand" onClick={() => navigate(defaultHome)} style={{ cursor: 'pointer' }}>
-          parakh<span className="nav-brand-ai">.ai</span>
-          <span className="nav-brand-light">viva</span>
-        </span>
+        <Brand onClick={() => navigate(defaultHome)} size={36} />
         <nav aria-label="Primary">
           {isTeacher && (
             <>
